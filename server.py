@@ -225,7 +225,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
             PYTHON_BIN, YTDLP_BIN, "--newline",
             "--concurrent-fragments", "10",
             "--http-chunk-size", "10M",
-            "--buffersize", "64K",
+            "--buffer-size", "64K",
             "-o", out_template
         ]
 
