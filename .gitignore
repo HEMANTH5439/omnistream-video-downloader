@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+history.json
+py312/
+yt-dlp*
+downloads/
+.DS_Store

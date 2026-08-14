@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniStream - Universal Video & Playlist Downloader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-background">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-group">
+                <div class="logo-icon-slick">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>OmniStream</h1>
+                    <span class="tagline">Universal HD Video & Playlist Downloader</span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button id="openFolderBtn" class="btn btn-secondary btn-sm">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    Open Folder
+                </button>
+            </div>
+        </header>
+
+        <!-- Save Path Settings Bar -->
+        <div class="path-bar-card">
+            <div class="path-bar-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                <span>Save Folder:</span>
+            </div>
+            <input type="text" id="outputPathInput" value="/Users/chillsyeah/.gemini/antigravity/scratch/downloads" title="Destination folder path">
+            <button id="browseFolderBtn" class="btn-xs btn-browse">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                Browse...
+            </button>
+            <button id="resetPathBtn" class="btn-xs">Default</button>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- URL Input Card -->
+            <section class="card input-card">
+                <div class="card-header">
+                    <h2>Paste Video or Playlist Link</h2>
+                    <p>Supports YouTube (Videos & Playlists), TikTok, Twitter/X, Vimeo, Twitch, Reddit, Instagram & 1000+ sites</p>
+                </div>
+                
+                <form id="analyzeForm" class="url-form">
+                    <div class="input-wrapper">
+                        <svg class="link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                        <input type="url" id="urlInput" placeholder="Paste URL here (e.g. https://www.youtube.com/playlist?list=...)" required autocomplete="off">
+                        <button type="button" id="pasteBtn" class="paste-btn">Paste</button>
+                    </div>
+                    <button type="submit" id="analyzeBtn" class="btn btn-primary">
+                        <span class="btn-text">Analyze Link</span>
+                        <div class="spinner hidden" id="analyzeSpinner"></div>
+                    </button>
+                </form>
+
+                <!-- Supported Platforms Badges -->
+                <div class="platform-tags">
+                    <span class="badge">YouTube Playlists</span>
+                    <span class="badge">YouTube HD</span>
+                    <span class="badge">TikTok</span>
+                    <span class="badge">Twitter / X</span>
+                    <span class="badge">Vimeo</span>
+                    <span class="badge">Twitch</span>
+                    <span class="badge">Reddit</span>
+                    <span class="badge">+ 1000 More</span>
+                </div>
+            </section>
+
+            <!-- Video / Playlist Analysis Result Card -->
+            <section id="resultCard" class="card result-card hidden">
+                <div class="video-preview-grid">
+                    <div class="thumbnail-wrapper">
+                        <img id="videoThumbnail" src="" alt="Thumbnail">
+                        <span id="videoDuration" class="duration-badge">00:00</span>
+                    </div>
+
+                    <div class="video-details">
+                        <div class="video-meta-top">
+                            <span id="videoExtractor" class="platform-chip">Platform</span>
+                            <span id="playlistBadge" class="playlist-chip hidden">📜 Playlist</span>
+                            <span id="videoViews" class="views-chip hidden">0 views</span>
+                        </div>
+                        <h3 id="videoTitle">Video Title</h3>
+                        <p id="videoUploader" class="uploader-name">Uploader Name</p>
+
+                        <!-- Format Selector -->
+                        <div class="format-selection-group">
+                            <label for="formatSelect">Select Download Resolution & Quality:</label>
+                            <div class="select-wrapper">
+                                <select id="formatSelect">
+                                    <!-- Populated via JS -->
+                                </select>
+                                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </div>
+                        </div>
+
+                        <div class="action-buttons">
+                            <button id="downloadNowBtn" class="btn btn-gradient">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Start Download
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Playlist Items Container -->
+                <div id="playlistContainer" class="playlist-container hidden">
+                    <div class="playlist-header">
+                        <h4>Playlist Videos (<span id="playlistItemCount">0</span>)</h4>
+                        <span class="playlist-sub">Selected resolution will be applied to all videos in this playlist</span>
+                    </div>
+                    <div id="playlistItemsList" class="playlist-items-list">
+                        <!-- Populated via JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Active Downloads Section -->
+            <section class="card downloads-section">
+                <div class="section-header">
+                    <h2>Active Downloads</h2>
+                    <span id="activeCount" class="counter-badge">0</span>
+                </div>
+
+                <div id="downloadsList" class="downloads-list">
+                    <div class="empty-state" id="emptyDownloads">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        <p>No active downloads in progress.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Download History Section -->
+            <section class="card history-section">
+                <div class="section-header">
+                    <h2>Download History</h2>
+                    <button id="clearHistoryBtn" class="btn btn-text">Clear History</button>
+                </div>
+
+                <div id="historyList" class="history-list">
+                    <div class="empty-state" id="emptyHistory">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        <p>Your finished downloads will appear here.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>OmniStream &bull; Powered by yt-dlp & Python 3.12 &bull; Save Path Customizable</p>
+        </footer>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast hidden">
+        <span id="toastMsg">Notification message</span>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

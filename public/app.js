@@ -1,0 +1,428 @@
+document.addEventListener('DOMContentLoaded', () => {
+    // DOM Elements
+    const analyzeForm = document.getElementById('analyzeForm');
+    const urlInput = document.getElementById('urlInput');
+    const pasteBtn = document.getElementById('pasteBtn');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const analyzeSpinner = document.getElementById('analyzeSpinner');
+    const resultCard = document.getElementById('resultCard');
+
+    const outputPathInput = document.getElementById('outputPathInput');
+    const resetPathBtn = document.getElementById('resetPathBtn');
+    const browseFolderBtn = document.getElementById('browseFolderBtn');
+    const DEFAULT_PATH = "/Users/chillsyeah/.gemini/antigravity/scratch/downloads";
+
+    // Browse Folder button (macOS Native Dialog)
+    browseFolderBtn.addEventListener('click', async () => {
+        browseFolderBtn.disabled = true;
+        showToast("Opening folder picker window...");
+        try {
+            const res = await fetch('/api/select-folder', { method: 'POST' });
+            const data = await res.json();
+            if (data.folder_path) {
+                outputPathInput.value = data.folder_path;
+                showToast(`Selected save folder: ${data.folder_path}`);
+            }
+        } catch (e) {
+            showToast("Failed to launch folder picker");
+        } finally {
+            browseFolderBtn.disabled = false;
+        }
+    });
+
+    const videoThumbnail = document.getElementById('videoThumbnail');
+    const videoDuration = document.getElementById('videoDuration');
+    const videoExtractor = document.getElementById('videoExtractor');
+    const playlistBadge = document.getElementById('playlistBadge');
+    const videoViews = document.getElementById('videoViews');
+    const videoTitle = document.getElementById('videoTitle');
+    const videoUploader = document.getElementById('videoUploader');
+    const formatSelect = document.getElementById('formatSelect');
+    const downloadNowBtn = document.getElementById('downloadNowBtn');
+
+    const playlistContainer = document.getElementById('playlistContainer');
+    const playlistItemCount = document.getElementById('playlistItemCount');
+    const playlistItemsList = document.getElementById('playlistItemsList');
+
+    const downloadsList = document.getElementById('downloadsList');
+    const emptyDownloads = document.getElementById('emptyDownloads');
+    const activeCount = document.getElementById('activeCount');
+
+    const historyList = document.getElementById('historyList');
+    const emptyHistory = document.getElementById('emptyHistory');
+    const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+    const openFolderBtn = document.getElementById('openFolderBtn');
+
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toastMsg');
+
+    let currentVideoData = null;
+    let pollInterval = null;
+
+    // Reset path button
+    resetPathBtn.addEventListener('click', () => {
+        outputPathInput.value = DEFAULT_PATH;
+        showToast("Reset to default downloads folder");
+    });
+
+    // Toast helper
+    function showToast(message, duration = 3000) {
+        toastMsg.textContent = message;
+        toast.classList.remove('hidden');
+        setTimeout(() => {
+            toast.classList.add('hidden');
+        }, duration);
+    }
+
+    // Paste button helper
+    pasteBtn.addEventListener('click', async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+                urlInput.value = text;
+                showToast("URL pasted from clipboard!");
+            }
+        } catch (err) {
+            showToast("Unable to read clipboard. Please paste manually.");
+        }
+    });
+
+    // Open Downloads Folder
+    openFolderBtn.addEventListener('click', async () => {
+        const customPath = outputPathInput.value.trim() || DEFAULT_PATH;
+        try {
+            await fetch('/api/open-folder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filepath: customPath })
+            });
+            showToast(`Opened folder: ${customPath}`);
+        } catch (e) {
+            showToast("Failed to open folder");
+        }
+    });
+
+    // Clear History
+    clearHistoryBtn.addEventListener('click', async () => {
+        try {
+            await fetch('/api/clear-history', { method: 'POST' });
+            fetchHistory();
+            showToast("History cleared");
+        } catch (e) {
+            showToast("Failed to clear history");
+        }
+    });
+
+    // Analyze URL Form Submit
+    analyzeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const url = urlInput.value.trim();
+        if (!url) return;
+
+        // UI Loading state
+        analyzeBtn.disabled = true;
+        analyzeSpinner.classList.remove('hidden');
+        resultCard.classList.add('hidden');
+
+        try {
+            const res = await fetch(`/api/info?url=${encodeURIComponent(url)}`);
+            const data = await res.json();
+
+            if (data.error) {
+                showToast(`Error: ${data.error}`);
+                return;
+            }
+
+            currentVideoData = data;
+            renderVideoDetails(data);
+            showToast(data.is_playlist ? "Playlist analyzed!" : "Video analyzed!");
+
+        } catch (err) {
+            showToast("Failed to analyze URL. Please check server.");
+        } finally {
+            analyzeBtn.disabled = false;
+            analyzeSpinner.classList.add('hidden');
+        }
+    });
+
+    // Render Video / Playlist Info & Format Options
+    function renderVideoDetails(data) {
+        videoExtractor.textContent = data.extractor || 'Web';
+        videoTitle.textContent = data.title || 'Untitled';
+        videoUploader.textContent = data.uploader || 'Unknown Channel';
+
+        if (data.is_playlist) {
+            playlistBadge.classList.remove('hidden');
+            videoDuration.textContent = `${data.entry_count} Videos`;
+            videoThumbnail.src = (data.entries && data.entries[0] && data.entries[0].thumbnail) ? data.entries[0].thumbnail : 'https://via.placeholder.com/280x170?text=Playlist';
+            
+            // Populate playlist items preview list
+            playlistContainer.classList.remove('hidden');
+            playlistItemCount.textContent = data.entry_count;
+            playlistItemsList.innerHTML = '';
+
+            if (data.entries) {
+                data.entries.forEach((item, idx) => {
+                    const card = document.createElement('div');
+                    card.className = 'playlist-item-card';
+                    card.innerHTML = `
+                        <img src="${item.thumbnail || 'https://via.placeholder.com/50x35'}" alt="thumb">
+                        <div class="playlist-item-info">
+                            <span class="playlist-item-title">${idx + 1}. ${escapeHtml(item.title)}</span>
+                            <span class="playlist-item-duration">${item.duration || ''}</span>
+                        </div>
+                    `;
+                    playlistItemsList.appendChild(card);
+                });
+            }
+
+            downloadNowBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Download Full Playlist (${data.entry_count} Videos)
+            `;
+
+        } else {
+            playlistBadge.classList.add('hidden');
+            playlistContainer.classList.add('hidden');
+            videoThumbnail.src = data.thumbnail || 'https://via.placeholder.com/280x170?text=No+Thumbnail';
+            videoDuration.textContent = data.duration || '00:00';
+
+            downloadNowBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Start Download
+            `;
+        }
+
+        if (data.views) {
+            videoViews.textContent = data.views;
+            videoViews.classList.remove('hidden');
+        } else {
+            videoViews.classList.add('hidden');
+        }
+
+        // Build Format Options Dropdown
+        formatSelect.innerHTML = '';
+
+        if (data.video_formats && data.video_formats.length > 0) {
+            const videoOptGroup = document.createElement('optgroup');
+            videoOptGroup.label = '── Video Resolutions (HD / SD) ──';
+            data.video_formats.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f.format_id;
+                opt.dataset.label = f.label;
+                opt.dataset.isAudio = 'false';
+                opt.textContent = `${f.label} (${f.filesize_formatted})`;
+                videoOptGroup.appendChild(opt);
+            });
+            formatSelect.appendChild(videoOptGroup);
+        }
+
+        if (data.presets && data.presets.length > 0) {
+            const presetGroup = document.createElement('optgroup');
+            presetGroup.label = '── Presets & Audio ──';
+            data.presets.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.format_id;
+                opt.dataset.label = p.label;
+                opt.dataset.isAudio = p.is_audio ? 'true' : 'false';
+                opt.textContent = p.label;
+                presetGroup.appendChild(opt);
+            });
+            formatSelect.appendChild(presetGroup);
+        }
+
+        if (data.audio_formats && data.audio_formats.length > 0) {
+            const audioGroup = document.createElement('optgroup');
+            audioGroup.label = '── Audio Only Extracts ──';
+            data.audio_formats.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a.format_id;
+                opt.dataset.label = a.label;
+                opt.dataset.isAudio = 'true';
+                opt.textContent = `${a.label} (${a.filesize_formatted})`;
+                audioGroup.appendChild(opt);
+            });
+            formatSelect.appendChild(audioGroup);
+        }
+
+        resultCard.classList.remove('hidden');
+        resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Start Download Trigger
+    downloadNowBtn.addEventListener('click', async () => {
+        if (!currentVideoData) return;
+
+        const selectedOpt = formatSelect.options[formatSelect.selectedIndex];
+        const formatId = selectedOpt ? selectedOpt.value : null;
+        const formatLabel = selectedOpt ? selectedOpt.dataset.label : 'Standard';
+        const isAudio = selectedOpt ? selectedOpt.dataset.isAudio === 'true' : false;
+        const customOutputDir = outputPathInput.value.trim() || DEFAULT_PATH;
+
+        const payload = {
+            url: urlInput.value.trim(),
+            title: currentVideoData.title,
+            thumbnail: currentVideoData.thumbnail || '',
+            format_id: formatId,
+            format_label: formatLabel,
+            is_audio: isAudio,
+            is_playlist: currentVideoData.is_playlist || false,
+            output_dir: customOutputDir
+        };
+
+        try {
+            const res = await fetch('/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.task_id) {
+                showToast(currentVideoData.is_playlist ? "Playlist download started!" : "Download started!");
+                startPollingTasks();
+            } else {
+                showToast("Error starting download.");
+            }
+        } catch (err) {
+            showToast("Failed to initiate download.");
+        }
+    });
+
+    // Poll Active Tasks
+    function startPollingTasks() {
+        if (!pollInterval) {
+            pollTasks();
+            pollInterval = setInterval(pollTasks, 1000);
+        }
+    }
+
+    async function pollTasks() {
+        try {
+            const res = await fetch('/api/tasks');
+            const tasks = await res.json();
+            renderActiveTasks(tasks);
+            fetchHistory();
+        } catch (e) {
+            console.error("Polling error", e);
+        }
+    }
+
+    // Render Active Tasks
+    function renderActiveTasks(tasks) {
+        const activeTasks = tasks.filter(t => t.status === 'downloading' || t.status === 'queued');
+        activeCount.textContent = activeTasks.length;
+
+        if (activeTasks.length === 0) {
+            emptyDownloads.classList.remove('hidden');
+            downloadsList.querySelectorAll('.download-item').forEach(el => el.remove());
+            return;
+        }
+
+        emptyDownloads.classList.add('hidden');
+
+        activeTasks.forEach(task => {
+            let item = document.getElementById(`task-${task.id}`);
+            if (!item) {
+                item = document.createElement('div');
+                item.id = `task-${task.id}`;
+                item.className = 'download-item';
+                downloadsList.appendChild(item);
+            }
+
+            item.innerHTML = `
+                <div class="item-top">
+                    <div class="item-info">
+                        <span class="item-title">${escapeHtml(task.title)}</span>
+                        <span class="item-sub">${escapeHtml(task.format)} &bull; ${task.size || ''}</span>
+                    </div>
+                    <span class="status-pill ${task.status}">${task.status}</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-fill" style="width: ${task.percent || 0}%"></div>
+                </div>
+                <div class="progress-stats">
+                    <span>${(task.percent || 0).toFixed(1)}% downloaded</span>
+                    <span>${task.speed || '0 KB/s'} &bull; ETA: ${task.eta || '--:--'}</span>
+                </div>
+            `;
+        });
+    }
+
+    // Fetch and Render History
+    async function fetchHistory() {
+        try {
+            const res = await fetch('/api/history');
+            const history = await res.json();
+            renderHistory(history);
+        } catch (e) {
+            console.error("Failed to fetch history", e);
+        }
+    }
+
+    function renderHistory(history) {
+        if (!history || history.length === 0) {
+            emptyHistory.classList.remove('hidden');
+            historyList.querySelectorAll('.history-item').forEach(el => el.remove());
+            return;
+        }
+
+        emptyHistory.classList.add('hidden');
+        historyList.querySelectorAll('.history-item').forEach(el => el.remove());
+
+        history.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'history-item';
+            el.innerHTML = `
+                <div class="item-info">
+                    <span class="item-title">${escapeHtml(item.title)}</span>
+                    <span class="item-sub">${escapeHtml(item.format)} &bull; Completed</span>
+                </div>
+                <div class="history-actions">
+                    <button class="action-icon-btn open-file-btn" data-filepath="${escapeHtml(item.filepath || '')}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        Play
+                    </button>
+                    <button class="action-icon-btn open-folder-btn" data-filepath="${escapeHtml(item.filepath || '')}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                        Finder
+                    </button>
+                </div>
+            `;
+            historyList.appendChild(el);
+        });
+
+        // Add action listeners
+        document.querySelectorAll('.open-file-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filepath = btn.dataset.filepath;
+                if (filepath) {
+                    fetch('/api/open-file', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filepath })
+                    });
+                }
+            });
+        });
+
+        document.querySelectorAll('.open-folder-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filepath = btn.dataset.filepath;
+                fetch('/api/open-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filepath })
+                });
+            });
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    // Initial history fetch
+    fetchHistory();
+    startPollingTasks();
+});
