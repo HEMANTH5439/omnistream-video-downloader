@@ -31,6 +31,7 @@ if not os.path.exists(YTDLP_BIN):
 # In-memory download tasks state
 # task_id -> { "id", "url", "title", "thumbnail", "format", "status", "percent", "speed", "eta", "size", "filepath", "error" }
 active_tasks = {}
+process_store = {}
 active_lock = threading.Lock()
 
 def load_history():
@@ -238,6 +239,8 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
 
         try:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            with active_lock:
+                process_store[task_id] = process
             
             # Progress regex: [download]  45.2% of  100.00MiB at   5.20MiB/s ETA 00:10
             progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%\s+of\s+([~\d\.\w]+)\s+at\s+([\d\.\w/]+)\s+ETA\s+([\d:]+)')
@@ -429,6 +432,25 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             is_playlist = data.get("is_playlist", False)
             start_download_thread(task_id, url, format_id, is_audio, output_dir, is_playlist=is_playlist)
             self.send_json({"task_id": task_id, "status": "queued"})
+            return
+
+        elif path == "/api/cancel-task":
+            task_id = data.get("task_id")
+            if task_id and task_id in process_store:
+                proc = process_store[task_id]
+                try:
+                    proc.terminate()
+                    time.sleep(0.2)
+                    if proc.poll() is None:
+                        proc.kill()
+                except Exception:
+                    pass
+                with active_lock:
+                    if task_id in active_tasks:
+                        active_tasks[task_id]["status"] = "canceled"
+                self.send_json({"success": True})
+            else:
+                self.send_json({"error": "Task not found"}, 404)
             return
 
         elif path == "/api/select-folder":

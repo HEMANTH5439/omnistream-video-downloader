@@ -335,7 +335,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="item-title">${escapeHtml(task.title)}</span>
                         <span class="item-sub">${escapeHtml(task.format)} &bull; ${task.size || ''}</span>
                     </div>
-                    <span class="status-pill ${task.status}">${task.status}</span>
+                    <div class="item-actions-right" style="display:flex; align-items:center; gap:0.5rem;">
+                        <span class="status-pill ${task.status}">${task.status}</span>
+                        <button class="action-icon-btn btn-cancel-task" data-id="${task.id}" title="Stop download">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            Stop
+                        </button>
+                    </div>
                 </div>
                 <div class="progress-bar-container">
                     <div class="progress-fill" style="width: ${task.percent || 0}%"></div>
@@ -345,6 +351,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span>${task.speed || '0 KB/s'} &bull; ETA: ${task.eta || '--:--'}</span>
                 </div>
             `;
+        });
+
+        downloadsList.querySelectorAll('.btn-cancel-task').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const taskId = btn.dataset.id;
+                try {
+                    await fetch('/api/cancel-task', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ task_id: taskId })
+                    });
+                    showToast("Download stopped");
+                    pollTasks();
+                } catch (e) {
+                    showToast("Failed to stop download");
+                }
+            });
         });
     }
 
