@@ -221,7 +221,13 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         else:
             out_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 
-        cmd = [PYTHON_BIN, YTDLP_BIN, "--newline", "-o", out_template]
+        cmd = [
+            PYTHON_BIN, YTDLP_BIN, "--newline",
+            "--concurrent-fragments", "10",
+            "--http-chunk-size", "10M",
+            "--buffersize", "64K",
+            "-o", out_template
+        ]
 
         if is_audio:
             cmd.extend(["-x", "--audio-format", "mp3", "--audio-quality", "0"])
