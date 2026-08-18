@@ -97,7 +97,27 @@ def get_video_info(url):
             last_err = str(e)
 
     if not res or res.returncode != 0:
-        return { "error": last_err or "Unable to extract video details. YouTube bot protection may require cookies or signed-in browser." }
+        # Deep HTML Link Scraper fallback for movie index pages & embed wrappers
+        if "Unsupported URL" in last_err or "is not a valid URL" in last_err or not res:
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    html = resp.read().decode('utf-8', errors='ignore')
+                    found_urls = re.findall(r'https?://[^\s\"\'<>]+', html)
+                    video_embeds = [u for u in found_urls if any(k in u.lower() for k in ['embed', 'player', 'm3u8', 'vidsrc', 'megacloud', 'filemoon', 'streamtape']) and u != url]
+                    if video_embeds:
+                        target_embed = video_embeds[0]
+                        sub_cmd = [PYTHON_BIN, YTDLP_BIN, "-J", "--no-warnings", target_embed]
+                        sub_res = subprocess.run(sub_cmd, capture_output=True, text=True, timeout=30)
+                        if sub_res.returncode == 0 and sub_res.stdout.strip().startswith("{"):
+                            res = sub_res
+            except Exception:
+                pass
+
+    if not res or res.returncode != 0:
+        if "Unsupported URL" in last_err:
+            return { "error": "Unsupported movie index page. Please right-click the video player on the site, copy the direct Embed / Player link or .m3u8 stream link, and paste it here." }
+        return { "error": last_err or "Unable to extract video details. Please verify the link." }
 
     try:
         data = json.loads(res.stdout)
