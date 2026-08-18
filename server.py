@@ -78,9 +78,7 @@ def get_video_info(url):
     attempts = [
         [PYTHON_BIN, YTDLP_BIN] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN, "--extractor-args", "youtube:player_client=mweb,android,web_creator"] + base_flags + [url],
-        [PYTHON_BIN, YTDLP_BIN, "--cookies-from-browser", "firefox"] + base_flags + [url],
-        [PYTHON_BIN, YTDLP_BIN, "--cookies-from-browser", "chrome"] + base_flags + [url],
-        [PYTHON_BIN, YTDLP_BIN, "--cookies-from-browser", "safari"] + base_flags + [url]
+        [PYTHON_BIN, YTDLP_BIN, "--extractor-args", "youtube:player_client=ios,android"] + base_flags + [url]
     ]
 
     res = None
