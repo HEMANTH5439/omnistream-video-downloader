@@ -114,6 +114,25 @@ def get_video_info(url):
             except Exception:
                 pass
 
+        # Headless Chrome DOM rendering fallback if basic HTML scrape finds nothing
+        if (not res or res.returncode != 0) and ("Unsupported URL" in last_err or not res):
+            chrome_bin = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            if os.path.exists(chrome_bin):
+                try:
+                    c_cmd = [chrome_bin, "--headless", "--disable-gpu", "--dump-dom", url]
+                    c_res = subprocess.run(c_cmd, capture_output=True, text=True, timeout=25)
+                    if c_res.returncode == 0 and c_res.stdout:
+                        c_urls = re.findall(r'https?://[^\s\"\'<>]+', c_res.stdout)
+                        c_embeds = [u for u in c_urls if any(k in u.lower() for k in ['embed', 'player', 'm3u8', 'vidsrc', 'megacloud', 'filemoon', 'streamtape']) and u != url]
+                        if c_embeds:
+                            target_embed = c_embeds[0]
+                            sub_cmd = [PYTHON_BIN, YTDLP_BIN, "-J", "--no-warnings", target_embed]
+                            sub_res = subprocess.run(sub_cmd, capture_output=True, text=True, timeout=30)
+                            if sub_res.returncode == 0 and sub_res.stdout.strip().startswith("{"):
+                                res = sub_res
+                except Exception:
+                    pass
+
     if not res or res.returncode != 0:
         if "Unsupported URL" in last_err:
             return { "error": "Unsupported movie index page. Please right-click the video player on the site, copy the direct Embed / Player link or .m3u8 stream link, and paste it here." }
