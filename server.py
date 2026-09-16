@@ -11,6 +11,15 @@ import re
 import uuid
 from pathlib import Path
 
+try:
+    import certifi
+    ca_bundle = certifi.where()
+    os.environ['SSL_CERT_FILE'] = ca_bundle
+    os.environ['REQUESTS_CA_BUNDLE'] = ca_bundle
+    os.environ['CURL_CA_BUNDLE'] = ca_bundle
+except ImportError:
+    pass
+
 PORT = 8888
 BASE_DIR = Path(__file__).parent.resolve()
 PUBLIC_DIR = BASE_DIR / "public"
@@ -20,7 +29,7 @@ HISTORY_FILE = BASE_DIR / "history.json"
 
 # Python & yt-dlp binary locations
 PYTHON_BIN = "/Users/chillsyeah/.gemini/antigravity/scratch/py312/python/bin/python3"
-YTDLP_BIN = "/Users/chillsyeah/.gemini/antigravity/scratch/yt-dlp-latest"
+YTDLP_BIN = "/Users/chillsyeah/.gemini/antigravity/scratch/py312/python/bin/yt-dlp"
 
 if not os.path.exists(PYTHON_BIN):
     PYTHON_BIN = sys.executable
@@ -76,16 +85,19 @@ def get_video_info(url):
     base_flags = ["--flat-playlist", "-J", "--no-warnings"] if is_playlist_url else ["-J", "--no-warnings"]
 
     attempts = [
+        [PYTHON_BIN, YTDLP_BIN, "--impersonate", "chrome"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN] + base_flags + [url],
+        [PYTHON_BIN, YTDLP_BIN, "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN, "--extractor-args", "youtube:player_client=mweb,android,web_creator"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN, "--extractor-args", "youtube:player_client=ios,android"] + base_flags + [url]
     ]
 
     res = None
     last_err = ""
+    env = os.environ.copy()
     for cmd in attempts:
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=env)
             if r.returncode == 0 and r.stdout.strip().startswith("{"):
                 res = r
                 break
@@ -134,8 +146,24 @@ def get_video_info(url):
                     pass
 
     if not res or res.returncode != 0:
+        # Check if user pasted a direct .m3u8, .ts, dash CDN, or stream segment URL
+        url_lower = url.lower()
+        if any(k in url_lower for k in [".m3u8", ".ts", "seg-", "dash-", "cdn.eporner", "cdn."]):
+            return {
+                "title": "Direct Media Stream",
+                "uploader": "Direct Stream Link",
+                "duration": "Dynamic",
+                "thumbnail": "",
+                "video_formats": [{"format_id": "best", "resolution": "Full HD / Best Quality", "ext": "mp4", "filesize_str": "Direct Stream"}],
+                "audio_formats": [],
+                "presets": [{"label": "Direct Video Stream (.mp4)", "format_id": "best", "is_audio": False}]
+            }
+
+        if "403" in last_err or "Forbidden" in last_err or "not allowed by policy" in last_err:
+            return { "error": "This website enforces strict bot protection on main page URLs. Please right-click one of the segment rows (.ts / mp2t) from your browser DevTools Network tab, copy its URL, and paste it here to download directly!" }
+
         if "Unsupported URL" in last_err:
-            return { "error": "Unsupported movie index page. Please right-click the video player on the site, copy the direct Embed / Player link or .m3u8 stream link, and paste it here." }
+            return { "error": "Unsupported video link. Please paste a direct stream URL (.m3u8 / .ts)." }
         return { "error": last_err or "Unable to extract video details. Please verify the link." }
 
     try:
@@ -259,8 +287,16 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         else:
             out_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 
+        # Convert segment .ts URL to master playlist URL if user pasted segment URL
+        target_url = url
+        if ".ts" in url.lower() or "seg-" in url.lower():
+            target_url = re.sub(r'seg-\d+-v1-a1\.ts', 'master.m3u8', url)
+            target_url = re.sub(r'seg-\d+-\w+\.ts', 'master.m3u8', target_url)
+
         cmd = [
             PYTHON_BIN, YTDLP_BIN, "--newline",
+            "--impersonate", "chrome",
+            "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "--concurrent-fragments", "10",
             "--http-chunk-size", "10M",
             "--buffer-size", "64K",
@@ -272,10 +308,11 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         elif format_id:
             cmd.extend(["-f", format_id])
 
-        cmd.append(url)
+        cmd.append(target_url)
 
+        env = os.environ.copy()
         try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
             with active_lock:
                 process_store[task_id] = process
             
@@ -324,7 +361,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
             else:
                 # If command failed with firefox cookies, try plain without cookies
                 cmd_plain = [c for c in cmd if c not in ["--cookies-from-browser", "firefox"]]
-                p2 = subprocess.Popen(cmd_plain, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                p2 = subprocess.Popen(cmd_plain, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
                 for line in p2.stdout:
                     prog_match = progress_regex.search(line)
                     if prog_match:
@@ -349,7 +386,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                     with active_lock:
                         active_tasks[task_id].update({
                             "status": "failed",
-                            "error": "Download failed. Please check URL or connection."
+                            "error": "Download blocked by site policy (HTTP 403). Eporner requires session cookies. Export cookies.txt into the app directory or run with --cookies-from-browser."
                         })
         except Exception as e:
             with active_lock:
