@@ -85,7 +85,7 @@ def format_duration(seconds):
     return f"{m}:{s:02d}"
 
 def get_video_info(url):
-    is_playlist_url = any(k in url.lower() for k in ["list=", "playlist", "bilibili.com/space", "/lists", "/channel", "/fav"])
+    is_playlist_url = any(k in url.lower() for k in ["list=", "playlist", "/space", "/lists", "/channel", "/fav"])
     base_flags = ["--flat-playlist", "-J", "--no-warnings", "--no-check-certificate"] if is_playlist_url else ["-J", "--no-warnings", "--no-check-certificate"]
 
     attempts = [
@@ -151,7 +151,7 @@ def get_video_info(url):
     if not res or res.returncode != 0:
         # Check if user pasted a direct .m3u8, .ts, dash CDN, stream segment, or protected site video URL
         url_lower = url.lower()
-        if any(k in url_lower for k in [".m3u8", ".ts", "seg-", "dash-", "cdn.eporner", "cdn."]):
+        if any(k in url_lower for k in [".m3u8", ".ts", "seg-", "dash-", "cdn."]):
             return {
                 "title": "Direct Media Stream",
                 "uploader": "Direct Stream Link",
@@ -163,7 +163,7 @@ def get_video_info(url):
             }
 
         if "403" in last_err or "Forbidden" in last_err or "not allowed by policy" in last_err:
-            return { "error": "This page/playlist enforces anti-bot protection (HTTP 403 Forbidden). For protected Bilibili/YouTube playlists or direct video streams, please paste individual video links or stream URLs (.m3u8/.ts) directly into OmniStream!" }
+            return { "error": "This page/playlist enforces anti-bot protection (HTTP 403 Forbidden). For protected playlists or direct video streams, please paste individual video links or stream URLs (.m3u8/.ts) directly into OmniStream!" }
 
         if "Unsupported URL" in last_err:
             return { "error": "Unsupported video link. Please paste a direct stream URL (.m3u8 / .ts)." }
@@ -180,7 +180,7 @@ def get_video_info(url):
                 parsed_entries.append({
                     "id": entry.get("id"),
                     "title": entry.get("title", "Video"),
-                    "url": entry.get("url") or entry.get("webpage_url") or (f"https://www.youtube.com/watch?v={entry.get('id')}" if entry.get("id") else url),
+                    "url": entry.get("url") or entry.get("webpage_url") or url,
                     "duration": format_duration(entry.get("duration")),
                     "thumbnail": entry.get("thumbnail") or (entry.get("thumbnails")[-1]["url"] if entry.get("thumbnails") else "")
                 })
@@ -391,7 +391,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                     with active_lock:
                         active_tasks[task_id].update({
                             "status": "failed",
-                            "error": "Download blocked by site policy (HTTP 403). Eporner requires session cookies. Export cookies.txt into the app directory or run with --cookies-from-browser."
+                            "error": "Download blocked by site policy (HTTP 403). The site requires session cookies. Export cookies.txt into the app directory to download."
                         })
         except Exception as e:
             with active_lock:
