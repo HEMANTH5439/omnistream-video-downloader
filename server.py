@@ -89,6 +89,7 @@ def get_video_info(url):
     base_flags = ["--flat-playlist", "-J", "--no-warnings", "--no-check-certificate"] if is_playlist_url else ["-J", "--no-warnings", "--no-check-certificate"]
 
     attempts = [
+        [PYTHON_BIN, YTDLP_BIN, "--impersonate", "chrome"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN, "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN, "--extractor-args", "youtube:player_client=mweb,android,web_creator"] + base_flags + [url],
@@ -299,6 +300,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         cmd = [
             PYTHON_BIN, YTDLP_BIN, "--newline",
             "--no-check-certificate",
+            "--impersonate", "chrome",
             "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "--concurrent-fragments", "10",
             "--http-chunk-size", "10M",
