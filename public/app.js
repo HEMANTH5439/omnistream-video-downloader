@@ -12,21 +12,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const browseFolderBtn = document.getElementById('browseFolderBtn');
     const DEFAULT_PATH = "/Users/chillsyeah/.gemini/antigravity/scratch/downloads";
 
-    // Browse Folder button (macOS Native Dialog)
+    const folderPickerInput = document.getElementById('folderPickerInput');
+
+    // Browse Folder button handler (Native HTML5 picker with backend AppleScript fallback)
     browseFolderBtn.addEventListener('click', async () => {
-        browseFolderBtn.disabled = true;
-        showToast("Opening folder picker window...");
+        // First try server API call (native macOS dialog)
         try {
             const res = await fetch('/api/select-folder', { method: 'POST' });
             const data = await res.json();
             if (data.folder_path) {
                 outputPathInput.value = data.folder_path;
                 showToast(`Selected save folder: ${data.folder_path}`);
+                return;
             }
         } catch (e) {
-            showToast("Failed to launch folder picker");
-        } finally {
-            browseFolderBtn.disabled = false;
+            // fallback to web picker
+        }
+
+        // Fallback: trigger HTML directory selector
+        folderPickerInput.click();
+    });
+
+    folderPickerInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
+            // webkitRelativePath gives "FolderName/file.mp4"
+            const relPath = file.webkitRelativePath || '';
+            const folderName = relPath.split('/')[0] || '';
+            if (folderName) {
+                const currentPath = outputPathInput.value.trim();
+                const basePath = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                const newPath = basePath ? `${basePath}/${folderName}` : `/Users/chillsyeah/Downloads/${folderName}`;
+                outputPathInput.value = newPath;
+                showToast(`Selected folder: ${newPath}`);
+            }
         }
     });
 
@@ -145,6 +164,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const selectAllPlaylistBtn = document.getElementById('selectAllPlaylistBtn');
+    const deselectAllPlaylistBtn = document.getElementById('deselectAllPlaylistBtn');
+
+    if (selectAllPlaylistBtn) {
+        selectAllPlaylistBtn.addEventListener('click', () => {
+            document.querySelectorAll('.playlist-checkbox').forEach(cb => cb.checked = true);
+            updatePlaylistDownloadBtnText();
+        });
+    }
+
+    if (deselectAllPlaylistBtn) {
+        deselectAllPlaylistBtn.addEventListener('click', () => {
+            document.querySelectorAll('.playlist-checkbox').forEach(cb => cb.checked = false);
+            updatePlaylistDownloadBtnText();
+        });
+    }
+
+    function updatePlaylistDownloadBtnText() {
+        if (!currentVideoData || !currentVideoData.is_playlist) return;
+        const selectedCount = document.querySelectorAll('.playlist-checkbox:checked').length;
+        const total = currentVideoData.entry_count || (currentVideoData.entries ? currentVideoData.entries.length : 0);
+        downloadNowBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Download Selected (${selectedCount} of ${total} Videos)
+        `;
+    }
+
     // Render Video / Playlist Info & Format Options
     function renderVideoDetails(data) {
         videoExtractor.textContent = data.extractor || 'Web';
@@ -166,6 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const card = document.createElement('div');
                     card.className = 'playlist-item-card';
                     card.innerHTML = `
+                        <input type="checkbox" class="playlist-checkbox" data-url="${escapeHtml(item.url)}" data-title="${escapeHtml(item.title)}" data-thumb="${escapeHtml(item.thumbnail || '')}" checked style="accent-color: #8b5cf6; width: 16px; height: 16px; cursor: pointer;">
                         <img src="${item.thumbnail || 'https://via.placeholder.com/50x35'}" alt="thumb">
                         <div class="playlist-item-info">
                             <span class="playlist-item-title">${idx + 1}. ${escapeHtml(item.title)}</span>
@@ -174,12 +221,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     playlistItemsList.appendChild(card);
                 });
+
+                document.querySelectorAll('.playlist-checkbox').forEach(cb => {
+                    cb.addEventListener('change', updatePlaylistDownloadBtnText);
+                });
             }
 
-            downloadNowBtn.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                Download Full Playlist (${data.entry_count} Videos)
-            `;
+            updatePlaylistDownloadBtnText();
 
         } else {
             playlistBadge.classList.add('hidden');
@@ -259,6 +307,47 @@ document.addEventListener('DOMContentLoaded', () => {
         const isAudio = selectedOpt ? selectedOpt.dataset.isAudio === 'true' : false;
         const customOutputDir = outputPathInput.value.trim() || DEFAULT_PATH;
 
+        if (currentVideoData.is_playlist) {
+            const checkedBoxes = Array.from(document.querySelectorAll('.playlist-checkbox:checked'));
+            if (checkedBoxes.length === 0) {
+                showToast("Please select at least one video to download!");
+                return;
+            }
+
+            showToast(`Queueing ${checkedBoxes.length} videos from playlist...`);
+
+            for (const cb of checkedBoxes) {
+                const itemUrl = cb.dataset.url;
+                const itemTitle = cb.dataset.title;
+                const itemThumb = cb.dataset.thumb;
+
+                const payload = {
+                    url: itemUrl,
+                    title: itemTitle,
+                    thumbnail: itemThumb,
+                    format_id: formatId,
+                    format_label: formatLabel,
+                    is_audio: isAudio,
+                    is_playlist: false,
+                    output_dir: customOutputDir
+                };
+
+                try {
+                    await fetch('/api/download', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                } catch (err) {
+                    console.error("Failed to queue item", itemTitle, err);
+                }
+            }
+
+            showToast(`Queued ${checkedBoxes.length} videos successfully!`);
+            startPollingTasks();
+            return;
+        }
+
         const payload = {
             url: urlInput.value.trim(),
             title: currentVideoData.title,
@@ -266,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
             format_id: formatId,
             format_label: formatLabel,
             is_audio: isAudio,
-            is_playlist: currentVideoData.is_playlist || false,
+            is_playlist: false,
             output_dir: customOutputDir
         };
 
@@ -278,7 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (data.task_id) {
-                showToast(currentVideoData.is_playlist ? "Playlist download started!" : "Download started!");
+                showToast("Download started!");
                 startPollingTasks();
             } else {
                 showToast("Error starting download.");

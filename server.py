@@ -35,7 +35,11 @@ if not os.path.exists(PYTHON_BIN):
     PYTHON_BIN = sys.executable
 
 if not os.path.exists(YTDLP_BIN):
-    YTDLP_BIN = "yt-dlp"
+    standalone_dlp = BASE_DIR.parent / "yt-dlp"
+    if standalone_dlp.exists():
+        YTDLP_BIN = str(standalone_dlp)
+    else:
+        YTDLP_BIN = "yt-dlp"
 
 # In-memory download tasks state
 # task_id -> { "id", "url", "title", "thumbnail", "format", "status", "percent", "speed", "eta", "size", "filepath", "error" }
@@ -81,11 +85,10 @@ def format_duration(seconds):
     return f"{m}:{s:02d}"
 
 def get_video_info(url):
-    is_playlist_url = "list=" in url or "playlist" in url.lower()
-    base_flags = ["--flat-playlist", "-J", "--no-warnings"] if is_playlist_url else ["-J", "--no-warnings"]
+    is_playlist_url = any(k in url.lower() for k in ["list=", "playlist", "bilibili.com/space", "/lists", "/channel", "/fav"])
+    base_flags = ["--flat-playlist", "-J", "--no-warnings", "--no-check-certificate"] if is_playlist_url else ["-J", "--no-warnings", "--no-check-certificate"]
 
     attempts = [
-        [PYTHON_BIN, YTDLP_BIN, "--impersonate", "chrome"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN, "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN, "--extractor-args", "youtube:player_client=mweb,android,web_creator"] + base_flags + [url],
@@ -160,7 +163,7 @@ def get_video_info(url):
             }
 
         if "403" in last_err or "Forbidden" in last_err or "not allowed by policy" in last_err:
-            return { "error": "This website enforces strict bot protection on main page URLs. Please right-click one of the segment rows (.ts / mp2t) from your browser DevTools Network tab, copy its URL, and paste it here to download directly!" }
+            return { "error": "This page/playlist enforces anti-bot protection (HTTP 403 Forbidden). For protected Bilibili/YouTube playlists or direct video streams, please paste individual video links or stream URLs (.m3u8/.ts) directly into OmniStream!" }
 
         if "Unsupported URL" in last_err:
             return { "error": "Unsupported video link. Please paste a direct stream URL (.m3u8 / .ts)." }
@@ -295,7 +298,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
 
         cmd = [
             PYTHON_BIN, YTDLP_BIN, "--newline",
-            "--impersonate", "chrome",
+            "--no-check-certificate",
             "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "--concurrent-fragments", "10",
             "--http-chunk-size", "10M",
@@ -529,7 +532,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/api/select-folder":
             try:
-                script = 'tell application "System Events" to activate\nset chosenFolder to choose folder with prompt "Select OmniStream Download Folder"\nPOSIX path of chosenFolder'
+                script = 'tell application "Finder" to activate\nset chosenFolder to choose folder with prompt "Select OmniStream Download Folder"\nPOSIX path of chosenFolder'
                 res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=60)
                 if res.returncode == 0 and res.stdout.strip():
                     folder_path = res.stdout.strip().rstrip('/')
@@ -543,23 +546,31 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/open-file":
             filepath = data.get("filepath")
             if filepath and os.path.exists(filepath):
-                subprocess.run(["open", filepath])
+                res = subprocess.run(["open", filepath])
+                if res.returncode != 0:
+                    subprocess.run(["osascript", "-e", f'tell application "Finder" to open POSIX file "{filepath}"'])
                 self.send_json({"success": True})
             else:
-                self.send_json({"error": "File not found"}, 44)
+                self.send_json({"error": "File not found"}, 404)
             return
 
         elif path == "/api/open-folder":
             filepath = data.get("filepath") or str(DOWNLOADS_DIR)
+            if not os.path.exists(filepath):
+                filepath = str(DOWNLOADS_DIR)
+            
             if os.path.exists(filepath):
                 if os.path.isfile(filepath):
-                    subprocess.run(["open", "-R", filepath])
+                    res = subprocess.run(["open", "-R", filepath])
+                    if res.returncode != 0:
+                        subprocess.run(["osascript", "-e", f'tell application "Finder" to reveal POSIX file "{filepath}"', "-e", 'tell application "Finder" to activate'])
                 else:
-                    subprocess.run(["open", filepath])
+                    res = subprocess.run(["open", filepath])
+                    if res.returncode != 0:
+                        subprocess.run(["osascript", "-e", f'tell application "Finder" to open POSIX file "{filepath}"', "-e", 'tell application "Finder" to activate'])
                 self.send_json({"success": True})
             else:
-                subprocess.run(["open", str(DOWNLOADS_DIR)])
-                self.send_json({"success": True})
+                self.send_json({"error": "Folder not found"}, 404)
             return
 
         elif path == "/api/clear-history":

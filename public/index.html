@@ -48,6 +48,7 @@
                 <span>Save Folder:</span>
             </div>
             <input type="text" id="outputPathInput" value="/Users/chillsyeah/.gemini/antigravity/scratch/downloads" title="Destination folder path">
+            <input type="file" id="folderPickerInput" webkitdirectory directory style="display:none;">
             <button id="browseFolderBtn" class="btn-xs btn-browse">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                 Browse...
@@ -129,8 +130,14 @@
                 <!-- Playlist Items Container -->
                 <div id="playlistContainer" class="playlist-container hidden">
                     <div class="playlist-header">
-                        <h4>Playlist Videos (<span id="playlistItemCount">0</span>)</h4>
-                        <span class="playlist-sub">Selected resolution will be applied to all videos in this playlist</span>
+                        <div>
+                            <h4>Playlist / Channel Videos (<span id="playlistItemCount">0</span>)</h4>
+                            <span class="playlist-sub">Select individual videos to download or download all</span>
+                        </div>
+                        <div class="playlist-selection-tools">
+                            <button type="button" id="selectAllPlaylistBtn" class="btn-xs">Select All</button>
+                            <button type="button" id="deselectAllPlaylistBtn" class="btn-xs">Deselect All</button>
+                        </div>
                     </div>
                     <div id="playlistItemsList" class="playlist-items-list">
                         <!-- Populated via JS -->

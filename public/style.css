@@ -745,6 +745,12 @@ body {
     color: var(--text-muted);
 }
 
+.playlist-selection-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .playlist-items-list {
     max-height: 240px;
     overflow-y: auto;
