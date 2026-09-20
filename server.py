@@ -89,9 +89,9 @@ def get_video_info(url):
     base_flags = ["--flat-playlist", "-J", "--no-warnings", "--no-check-certificate"] if is_playlist_url else ["-J", "--no-warnings", "--no-check-certificate"]
 
     attempts = [
-        [PYTHON_BIN, YTDLP_BIN, "--impersonate", "chrome"] + base_flags + [url],
+        [PYTHON_BIN, YTDLP_BIN, "--impersonate", "safari"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN] + base_flags + [url],
-        [PYTHON_BIN, YTDLP_BIN, "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"] + base_flags + [url]
+        [PYTHON_BIN, YTDLP_BIN, "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15"] + base_flags + [url]
     ]
 
     res = None
@@ -300,8 +300,8 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         cmd = [
             PYTHON_BIN, YTDLP_BIN, "--newline",
             "--no-check-certificate",
-            "--impersonate", "chrome",
-            "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "--impersonate", "safari",
+            "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15",
             "--concurrent-fragments", "10",
             "--http-chunk-size", "10M",
             "--buffer-size", "64K",
@@ -365,7 +365,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                     save_history(active_tasks[task_id])
             else:
                 # If command failed with impersonate, try plain without impersonate
-                cmd_plain = [c for c in cmd if c not in ["--impersonate", "chrome"]]
+                cmd_plain = [c for c in cmd if c not in ["--impersonate", "safari"]]
                 p2 = subprocess.Popen(cmd_plain, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
                 for line in p2.stdout:
                     prog_match = progress_regex.search(line)
