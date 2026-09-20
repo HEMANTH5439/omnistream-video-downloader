@@ -110,9 +110,10 @@ def get_video_info(url):
         except Exception as e:
             last_err = str(e)
 
+    target_embed = None
     if not res or res.returncode != 0:
         # Deep HTML Link Scraper fallback for movie index pages & embed wrappers
-        if "Unsupported URL" in last_err or "is not a valid URL" in last_err or not res:
+        if "Unsupported URL" in last_err or "is not a valid URL" in last_err or "403" in last_err or "Forbidden" in last_err or not res:
             try:
                 req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
                 with urllib.request.urlopen(req, timeout=10) as resp:
@@ -129,7 +130,7 @@ def get_video_info(url):
                 pass
 
         # Headless Chrome DOM rendering fallback if basic HTML scrape finds nothing
-        if (not res or res.returncode != 0) and ("Unsupported URL" in last_err or not res):
+        if (not res or res.returncode != 0) and ("Unsupported URL" in last_err or "403" in last_err or "Forbidden" in last_err or not res):
             chrome_bin = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
             if os.path.exists(chrome_bin):
                 try:
@@ -150,7 +151,7 @@ def get_video_info(url):
     if not res or res.returncode != 0:
         # Check if user pasted a direct .m3u8, .ts, dash CDN, stream segment, or protected site video URL
         url_lower = url.lower()
-        if any(k in url_lower for k in [".m3u8", ".ts", "seg-", "dash-", "cdn.eporner", "eporner.com", "cdn."]):
+        if any(k in url_lower for k in [".m3u8", ".ts", "seg-", "dash-", "cdn.eporner", "cdn."]):
             return {
                 "title": "Direct Media Stream",
                 "uploader": "Direct Stream Link",
@@ -268,7 +269,8 @@ def get_video_info(url):
             "extractor": extractor,
             "video_formats": sorted_video_formats,
             "audio_formats": sorted(audio_formats, key=lambda x: x.get("abr", 0), reverse=True)[:3],
-            "presets": presets
+            "presets": presets,
+            "resolved_url": target_embed or url
         }
 
     except Exception as e:

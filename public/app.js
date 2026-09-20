@@ -349,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const payload = {
-            url: urlInput.value.trim(),
+            url: currentVideoData.resolved_url || urlInput.value.trim(),
             title: currentVideoData.title,
             thumbnail: currentVideoData.thumbnail || '',
             format_id: formatId,
