@@ -89,11 +89,11 @@ def get_video_info(url):
     base_flags = ["--flat-playlist", "-J", "--no-warnings", "--no-check-certificate"] if is_playlist_url else ["-J", "--no-warnings", "--no-check-certificate"]
 
     attempts = [
+        [PYTHON_BIN, YTDLP_BIN, "--cookies-from-browser", "chrome"] + base_flags + [url],
+        [PYTHON_BIN, YTDLP_BIN, "--cookies-from-browser", "safari"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN, "--impersonate", "chrome"] + base_flags + [url],
         [PYTHON_BIN, YTDLP_BIN] + base_flags + [url],
-        [PYTHON_BIN, YTDLP_BIN, "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"] + base_flags + [url],
-        [PYTHON_BIN, YTDLP_BIN, "--extractor-args", "youtube:player_client=mweb,android,web_creator"] + base_flags + [url],
-        [PYTHON_BIN, YTDLP_BIN, "--extractor-args", "youtube:player_client=ios,android"] + base_flags + [url]
+        [PYTHON_BIN, YTDLP_BIN, "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"] + base_flags + [url]
     ]
 
     res = None
@@ -300,6 +300,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         cmd = [
             PYTHON_BIN, YTDLP_BIN, "--newline",
             "--no-check-certificate",
+            "--cookies-from-browser", "chrome",
             "--impersonate", "chrome",
             "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "--concurrent-fragments", "10",
@@ -364,8 +365,8 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                     })
                     save_history(active_tasks[task_id])
             else:
-                # If command failed with firefox cookies, try plain without cookies
-                cmd_plain = [c for c in cmd if c not in ["--cookies-from-browser", "firefox"]]
+                # If command failed with chrome cookies, try plain without cookies
+                cmd_plain = [c for c in cmd if c not in ["--cookies-from-browser", "chrome"]]
                 p2 = subprocess.Popen(cmd_plain, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
                 for line in p2.stdout:
                     prog_match = progress_regex.search(line)
