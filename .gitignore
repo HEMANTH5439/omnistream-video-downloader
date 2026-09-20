@@ -7,3 +7,5 @@ py312/
 yt-dlp*
 downloads/
 .DS_Store
+chrome-data/
+test_seg.ts
