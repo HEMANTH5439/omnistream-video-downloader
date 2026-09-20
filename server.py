@@ -149,9 +149,9 @@ def get_video_info(url):
                     pass
 
     if not res or res.returncode != 0:
-        # Check if user pasted a direct .m3u8, .ts, dash CDN, or stream segment URL
+        # Check if user pasted a direct .m3u8, .ts, dash CDN, stream segment, or protected site video URL
         url_lower = url.lower()
-        if any(k in url_lower for k in [".m3u8", ".ts", "seg-", "dash-", "cdn.eporner", "cdn."]):
+        if any(k in url_lower for k in [".m3u8", ".ts", "seg-", "dash-", "cdn.eporner", "eporner.com", "cdn."]):
             return {
                 "title": "Direct Media Stream",
                 "uploader": "Direct Stream Link",
