@@ -9,6 +9,7 @@ import threading
 import time
 import re
 import uuid
+import signal
 from pathlib import Path
 
 try:
@@ -317,7 +318,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
 
         env = os.environ.copy()
         try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env, start_new_session=True)
             with active_lock:
                 process_store[task_id] = process
             
@@ -366,7 +367,9 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
             else:
                 # If command failed with impersonate, try plain without impersonate
                 cmd_plain = [c for c in cmd if c not in ["--impersonate", "safari"]]
-                p2 = subprocess.Popen(cmd_plain, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
+                p2 = subprocess.Popen(cmd_plain, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env, start_new_session=True)
+                with active_lock:
+                    process_store[task_id] = p2
                 for line in p2.stdout:
                     prog_match = progress_regex.search(line)
                     if prog_match:
@@ -518,16 +521,48 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             if task_id and task_id in process_store:
                 proc = process_store[task_id]
                 try:
-                    proc.terminate()
-                    time.sleep(0.2)
-                    if proc.poll() is None:
-                        proc.kill()
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                 except Exception:
-                    pass
+                    try:
+                        proc.kill()
+                    except:
+                        pass
                 with active_lock:
                     if task_id in active_tasks:
                         active_tasks[task_id]["status"] = "canceled"
                 self.send_json({"success": True})
+            else:
+                self.send_json({"error": "Task not found"}, 404)
+            return
+
+        elif path == "/api/pause-task":
+            task_id = data.get("task_id")
+            if task_id and task_id in process_store:
+                proc = process_store[task_id]
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGSTOP)
+                    with active_lock:
+                        if task_id in active_tasks:
+                            active_tasks[task_id]["status"] = "paused"
+                    self.send_json({"success": True})
+                except Exception as e:
+                    self.send_json({"error": f"Failed to pause: {str(e)}"}, 500)
+            else:
+                self.send_json({"error": "Task not found"}, 404)
+            return
+
+        elif path == "/api/resume-task":
+            task_id = data.get("task_id")
+            if task_id and task_id in process_store:
+                proc = process_store[task_id]
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGCONT)
+                    with active_lock:
+                        if task_id in active_tasks:
+                            active_tasks[task_id]["status"] = "downloading"
+                    self.send_json({"success": True})
+                except Exception as e:
+                    self.send_json({"error": f"Failed to resume: {str(e)}"}, 500)
             else:
                 self.send_json({"error": "Task not found"}, 404)
             return

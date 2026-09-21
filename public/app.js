@@ -398,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Render Active Tasks
     function renderActiveTasks(tasks) {
-        const activeTasks = tasks.filter(t => t.status === 'downloading' || t.status === 'queued');
+        const activeTasks = tasks.filter(t => t.status === 'downloading' || t.status === 'queued' || t.status === 'paused');
         activeCount.textContent = activeTasks.length;
 
         if (activeTasks.length === 0) {
@@ -426,6 +426,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="item-actions-right" style="display:flex; align-items:center; gap:0.5rem;">
                         <span class="status-pill ${task.status}">${task.status}</span>
+                        ${task.status === 'paused' ? 
+                            `<button class="action-icon-btn btn-resume-task" data-id="${task.id}" title="Resume download">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                Resume
+                            </button>` :
+                            `<button class="action-icon-btn btn-pause-task" data-id="${task.id}" title="Pause download">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                                Pause
+                            </button>`
+                        }
                         <button class="action-icon-btn btn-cancel-task" data-id="${task.id}" title="Stop download">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             Stop
@@ -455,6 +465,38 @@ document.addEventListener('DOMContentLoaded', () => {
                     pollTasks();
                 } catch (e) {
                     showToast("Failed to stop download");
+                }
+            });
+        });
+
+        downloadsList.querySelectorAll('.btn-pause-task').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const taskId = btn.dataset.id;
+                try {
+                    await fetch('/api/pause-task', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ task_id: taskId })
+                    });
+                    pollTasks();
+                } catch (e) {
+                    showToast("Failed to pause download");
+                }
+            });
+        });
+
+        downloadsList.querySelectorAll('.btn-resume-task').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const taskId = btn.dataset.id;
+                try {
+                    await fetch('/api/resume-task', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ task_id: taskId })
+                    });
+                    pollTasks();
+                } catch (e) {
+                    showToast("Failed to resume download");
                 }
             });
         });
