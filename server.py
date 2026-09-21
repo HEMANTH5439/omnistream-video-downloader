@@ -314,6 +314,14 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         elif format_id:
             cmd.extend(["-f", format_id])
 
+        if "bilibili.com" in target_url or "b23.tv" in target_url:
+            aria_path = os.path.abspath("bin/aria2c")
+            if os.path.exists(aria_path):
+                cmd.extend([
+                    "--downloader", aria_path,
+                    "--downloader-args", "aria2c:-x 16 -s 16 -k 1M"
+                ])
+
         cmd.append(target_url)
 
         env = os.environ.copy()
@@ -324,6 +332,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
             
             # Progress regex: [download]  45.2% of  100.00MiB at   5.20MiB/s ETA 00:10
             progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%\s+of\s+([~\d\.\w]+)\s+at\s+([\d\.\w/]+)\s+ETA\s+([\d:]+)')
+            aria2_regex = re.compile(r'\[#.*? \S+/([~\d\.\w]+)\((\d+)%\).*?DL:([~\d\.\w]+).*?ETA:([^\]]+)\]')
             dest_regex = re.compile(r'\[download\] Destination:\s+(.+)')
             merge_regex = re.compile(r'\[Merger\] Merging formats into "(.+)"')
 
@@ -340,11 +349,22 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                     filepath = merge_match.group(1).strip().replace('"', '')
 
                 prog_match = progress_regex.search(line)
+                aria2_match = aria2_regex.search(line)
+                
+                pct, size, speed, eta = None, None, None, None
+
                 if prog_match:
                     pct = float(prog_match.group(1))
                     size = prog_match.group(2)
                     speed = prog_match.group(3)
                     eta = prog_match.group(4)
+                elif aria2_match:
+                    size = aria2_match.group(1)
+                    pct = float(aria2_match.group(2))
+                    speed = aria2_match.group(3) + "/s"
+                    eta = aria2_match.group(4)
+
+                if pct is not None:
                     with active_lock:
                         active_tasks[task_id].update({
                             "percent": pct,
@@ -372,13 +392,28 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                     process_store[task_id] = p2
                 for line in p2.stdout:
                     prog_match = progress_regex.search(line)
+                    aria2_match = aria2_regex.search(line)
+                    
+                    pct, size, speed, eta = None, None, None, None
+
                     if prog_match:
+                        pct = float(prog_match.group(1))
+                        size = prog_match.group(2)
+                        speed = prog_match.group(3)
+                        eta = prog_match.group(4)
+                    elif aria2_match:
+                        size = aria2_match.group(1)
+                        pct = float(aria2_match.group(2))
+                        speed = aria2_match.group(3) + "/s"
+                        eta = aria2_match.group(4)
+
+                    if pct is not None:
                         with active_lock:
                             active_tasks[task_id].update({
-                                "percent": float(prog_match.group(1)),
-                                "size": prog_match.group(2),
-                                "speed": prog_match.group(3),
-                                "eta": prog_match.group(4),
+                                "percent": pct,
+                                "size": size,
+                                "speed": speed,
+                                "eta": eta,
                                 "status": "downloading"
                             })
                 p2.wait()

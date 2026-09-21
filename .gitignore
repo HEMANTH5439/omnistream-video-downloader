@@ -9,3 +9,4 @@ downloads/
 .DS_Store
 chrome-data/
 test_seg.ts
+bin/
