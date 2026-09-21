@@ -10,3 +10,6 @@ downloads/
 chrome-data/
 test_seg.ts
 bin/
+*.part
+*.part.aria2
+*.tar.xz
