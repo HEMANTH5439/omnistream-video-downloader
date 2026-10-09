@@ -21,32 +21,48 @@ try:
 except ImportError:
     pass
 
+import webbrowser
+
+def get_resource_path(*paths):
+    try:
+        base = Path(sys._MEIPASS)
+    except AttributeError:
+        base = Path(__file__).parent.resolve()
+    return base.joinpath(*paths)
+
 PORT = 8888
-BASE_DIR = Path(__file__).parent.resolve()
-PUBLIC_DIR = BASE_DIR / "public"
-DOWNLOADS_DIR = BASE_DIR.parent / "downloads"
+BASE_DIR = get_resource_path()
+PUBLIC_DIR = get_resource_path("public")
+DOWNLOADS_DIR = Path.home() / "Downloads" / "OmniStream"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-HISTORY_FILE = BASE_DIR / "history.json"
+HISTORY_FILE = Path.home() / "Library" / "Application Support" / "OmniStream" / "history.json"
+HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-# Python & yt-dlp binary locations
-PYTHON_BIN = "/Users/chillsyeah/.gemini/antigravity/scratch/py312/python/bin/python3"
-YTDLP_BIN = "/Users/chillsyeah/.gemini/antigravity/scratch/py312/python/bin/yt-dlp"
-
-if not os.path.exists(PYTHON_BIN):
-    PYTHON_BIN = sys.executable
-
-if not os.path.exists(YTDLP_BIN):
-    standalone_dlp = BASE_DIR.parent / "yt-dlp"
-    if standalone_dlp.exists():
-        YTDLP_BIN = str(standalone_dlp)
-    else:
-        YTDLP_BIN = "yt-dlp"
+# Binaries
+YTDLP_BIN = str(get_resource_path("bin", "yt-dlp"))
+FFMPEG_BIN = str(get_resource_path("bin", "ffmpeg"))
+FFMPEG_DIR = os.path.dirname(FFMPEG_BIN)
 
 # In-memory download tasks state
 # task_id -> { "id", "url", "title", "thumbnail", "format", "status", "percent", "speed", "eta", "size", "filepath", "error" }
 active_tasks = {}
 process_store = {}
 active_lock = threading.Lock()
+download_semaphore = threading.Semaphore(3)
+
+def parse_bytes(size_str):
+    if not size_str or size_str == '~': return 0
+    size_str = size_str.upper().replace('IB', 'B').replace('I', '').strip()
+    match = re.match(r"([\d\.]+)\s*([A-Z]+)?", size_str)
+    if not match: return 0
+    val = float(match.group(1))
+    unit = match.group(2)
+    multiplier = 1
+    if unit == 'KB' or unit == 'K': multiplier = 1024
+    elif unit == 'MB' or unit == 'M': multiplier = 1024**2
+    elif unit == 'GB' or unit == 'G': multiplier = 1024**3
+    elif unit == 'TB' or unit == 'T': multiplier = 1024**4
+    return int(val * multiplier)
 
 def load_history():
     if HISTORY_FILE.exists():
@@ -90,9 +106,9 @@ def get_video_info(url):
     base_flags = ["--flat-playlist", "-J", "--no-warnings", "--no-check-certificate"] if is_playlist_url else ["-J", "--no-warnings", "--no-check-certificate"]
 
     attempts = [
-        [PYTHON_BIN, YTDLP_BIN, "--impersonate", "safari"] + base_flags + [url],
-        [PYTHON_BIN, YTDLP_BIN] + base_flags + [url],
-        [PYTHON_BIN, YTDLP_BIN, "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15"] + base_flags + [url]
+        [YTDLP_BIN, "--impersonate", "safari"] + base_flags + [url],
+        [YTDLP_BIN] + base_flags + [url],
+        [YTDLP_BIN, "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15"] + base_flags + [url]
     ]
 
     res = None
@@ -123,7 +139,7 @@ def get_video_info(url):
                     video_embeds = [u for u in found_urls if any(k in u.lower() for k in ['embed', 'player', 'm3u8', 'vidsrc', 'megacloud', 'filemoon', 'streamtape']) and u != url]
                     if video_embeds:
                         target_embed = video_embeds[0]
-                        sub_cmd = [PYTHON_BIN, YTDLP_BIN, "-J", "--no-warnings", target_embed]
+                        sub_cmd = [YTDLP_BIN, "-J", "--no-warnings", target_embed]
                         sub_res = subprocess.run(sub_cmd, capture_output=True, text=True, timeout=30)
                         if sub_res.returncode == 0 and sub_res.stdout.strip().startswith("{"):
                             res = sub_res
@@ -142,7 +158,7 @@ def get_video_info(url):
                         c_embeds = [u for u in c_urls if any(k in u.lower() for k in ['embed', 'player', 'm3u8', 'vidsrc', 'megacloud', 'filemoon', 'streamtape']) and u != url]
                         if c_embeds:
                             target_embed = c_embeds[0]
-                            sub_cmd = [PYTHON_BIN, YTDLP_BIN, "-J", "--no-warnings", target_embed]
+                            sub_cmd = [YTDLP_BIN, "-J", "--no-warnings", target_embed]
                             sub_res = subprocess.run(sub_cmd, capture_output=True, text=True, timeout=30)
                             if sub_res.returncode == 0 and sub_res.stdout.strip().startswith("{"):
                                 res = sub_res
@@ -173,11 +189,10 @@ def get_video_info(url):
     try:
         data = json.loads(res.stdout)
 
-        # Check if playlist
         if data.get('_type') == 'playlist' or ('entries' in data and isinstance(data.get('entries'), list)):
             entries = [e for e in data.get('entries', []) if e]
             parsed_entries = []
-            for entry in entries[:50]:
+            for entry in entries:
                 parsed_entries.append({
                     "id": entry.get("id"),
                     "title": entry.get("title", "Video"),
@@ -195,6 +210,9 @@ def get_video_info(url):
                 "extractor": data.get("extractor_key", "Playlist"),
                 "presets": [
                     { "format_id": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best", "resolution": "Best Quality", "label": "Best Available Quality for All Videos (Auto MP4)", "ext": "mp4" },
+                    { "format_id": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best", "resolution": "1080p (Full HD)", "label": "1080p (Full HD) - If available", "ext": "mp4" },
+                    { "format_id": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best", "resolution": "720p (HD)", "label": "720p (HD) - If available", "ext": "mp4" },
+                    { "format_id": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best", "resolution": "480p (SD)", "label": "480p (SD) - If available", "ext": "mp4" },
                     { "format_id": "bestaudio/best", "resolution": "Audio MP3", "label": "Extract Audio MP3 for All Videos", "ext": "mp3", "is_audio": True }
                 ]
             }
@@ -229,11 +247,12 @@ def get_video_info(url):
                 # Store highest quality format for each resolution height
                 if res_key not in formats_map or filesize > formats_map[res_key].get("filesize", 0):
                     fps_str = f" ({fps}fps)" if fps and fps > 30 else ""
+                    final_ext = "MKV" if acodec == "none" else ext.upper()
                     formats_map[res_key] = {
                         "format_id": format_id if acodec != "none" else f"{format_id}+bestaudio/best",
                         "resolution": res_key,
-                        "label": f"{res_key}{fps_str} - {ext.upper()}",
-                        "ext": ext,
+                        "label": f"{res_key}{fps_str} - {final_ext}",
+                        "ext": final_ext.lower(),
                         "filesize": filesize,
                         "filesize_formatted": format_bytes(filesize),
                         "height": height
@@ -277,10 +296,12 @@ def get_video_info(url):
     except Exception as e:
         return { "error": str(e) }
 
-def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_playlist=False):
+def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_playlist=False, force_mp4=False, embed_subs=False):
     def run():
         with active_lock:
             active_tasks[task_id]["status"] = "downloading"
+            active_tasks[task_id]["start_time"] = time.time()
+            active_tasks[task_id]["speed_history"] = []
 
         try:
             os.makedirs(output_dir, exist_ok=True)
@@ -299,8 +320,9 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
             target_url = re.sub(r'seg-\d+-\w+\.ts', 'master.m3u8', target_url)
 
         cmd = [
-            PYTHON_BIN, YTDLP_BIN, "--newline",
+            YTDLP_BIN, "--newline",
             "--no-check-certificate",
+            "--ffmpeg-location", FFMPEG_DIR,
             "--impersonate", "safari",
             "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15",
             "--concurrent-fragments", "10",
@@ -310,9 +332,17 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         ]
 
         if is_audio:
-            cmd.extend(["-x", "--audio-format", "mp3", "--audio-quality", "0"])
+            cmd.extend(["-x", "--audio-format", "mp3", "--audio-quality", "0", "--embed-metadata", "--embed-thumbnail"])
         elif format_id:
             cmd.extend(["-f", format_id])
+            if "mp4" in format_id:
+                cmd.extend(["--merge-output-format", "mp4"])
+
+        if embed_subs and not is_audio:
+            cmd.extend(["--write-auto-subs", "--embed-subs"])
+
+        if force_mp4 and not is_audio:
+            cmd.extend(["--recode-video", "mp4"])
 
         if "bilibili.com" in target_url or "b23.tv" in target_url:
             aria_path = os.path.abspath("bin/aria2c")
@@ -325,99 +355,88 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         cmd.append(target_url)
 
         env = os.environ.copy()
-        try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env, start_new_session=True)
-            with active_lock:
-                process_store[task_id] = process
+        
+        with active_lock:
+            active_tasks[task_id]["status"] = "queued"
             
-            # Progress regex: [download]  45.2% of  100.00MiB at   5.20MiB/s ETA 00:10
-            progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%\s+of\s+([~\d\.\w]+)\s+at\s+([\d\.\w/]+)\s+ETA\s+([\d:]+)')
-            aria2_regex = re.compile(r'\[#.*? \S+/([~\d\.\w]+)\((\d+)%\).*?DL:([~\d\.\w]+).*?ETA:([^\]]+)\]')
-            dest_regex = re.compile(r'\[download\] Destination:\s+(.+)')
-            merge_regex = re.compile(r'\[Merger\] Merging formats into "(.+)"')
-
-            filepath = None
-
-            for line in process.stdout:
-                line = line.strip()
-                dest_match = dest_regex.search(line)
-                if dest_match:
-                    filepath = dest_match.group(1).strip()
-
-                merge_match = merge_regex.search(line)
-                if merge_match:
-                    filepath = merge_match.group(1).strip().replace('"', '')
-
-                prog_match = progress_regex.search(line)
-                aria2_match = aria2_regex.search(line)
+        with download_semaphore:
+            with active_lock:
+                if active_tasks[task_id]["status"] != "canceled":
+                    active_tasks[task_id]["status"] = "downloading"
+                    
+            if active_tasks[task_id]["status"] == "canceled":
+                return
                 
-                pct, size, speed, eta = None, None, None, None
-
-                if prog_match:
-                    pct = float(prog_match.group(1))
-                    size = prog_match.group(2)
-                    speed = prog_match.group(3)
-                    eta = prog_match.group(4)
-                elif aria2_match:
-                    size = aria2_match.group(1)
-                    pct = float(aria2_match.group(2))
-                    speed = aria2_match.group(3) + "/s"
-                    eta = aria2_match.group(4)
-
-                if pct is not None:
-                    with active_lock:
-                        active_tasks[task_id].update({
-                            "percent": pct,
-                            "size": size,
-                            "speed": speed,
-                            "eta": eta,
-                            "status": "downloading"
-                        })
-
-            process.wait()
-
-            if process.returncode == 0:
+            try:
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env, start_new_session=True)
                 with active_lock:
-                    active_tasks[task_id].update({
-                        "percent": 100.0,
-                        "status": "completed",
-                        "filepath": filepath or os.path.join(output_dir, f"{active_tasks[task_id]['title']}.mp4")
-                    })
-                    save_history(active_tasks[task_id])
-            else:
-                # If command failed with impersonate, try plain without impersonate
-                cmd_plain = [c for c in cmd if c not in ["--impersonate", "safari"]]
-                p2 = subprocess.Popen(cmd_plain, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env, start_new_session=True)
-                with active_lock:
-                    process_store[task_id] = p2
-                for line in p2.stdout:
+                    process_store[task_id] = process
+                
+                # Progress regex: [download]  45.2% of  100.00MiB at   5.20MiB/s ETA 00:10
+                progress_regex = re.compile(r'\[download\]\s+(\d+\.\d+)%\s+of\s+([~\d\.\w]+)\s+at\s+([\d\.\w/]+)\s+ETA\s+([\d:]+)')
+                aria2_regex = re.compile(r'\[#.*? \S+/([~\d\.\w]+)\((\d+)%\).*?DL:([~\d\.\w]+).*?ETA:([^\]]+)\]')
+                dest_regex = re.compile(r'\[download\] Destination:\s+(.+)')
+                merge_regex = re.compile(r'\[Merger\] Merging formats into "(.+)"')
+
+                filepath = None
+
+                for line in process.stdout:
+                    line = line.strip()
+                    dest_match = dest_regex.search(line)
+                    if dest_match:
+                        filepath = dest_match.group(1).strip()
+
+                    merge_match = merge_regex.search(line)
+                    if merge_match:
+                        filepath = merge_match.group(1).strip().replace('"', '')
+
                     prog_match = progress_regex.search(line)
                     aria2_match = aria2_regex.search(line)
                     
-                    pct, size, speed, eta = None, None, None, None
+                    pct, raw_size, raw_speed, raw_eta = None, None, None, None
 
                     if prog_match:
                         pct = float(prog_match.group(1))
-                        size = prog_match.group(2)
-                        speed = prog_match.group(3)
-                        eta = prog_match.group(4)
+                        raw_size = prog_match.group(2)
+                        raw_speed = prog_match.group(3)
                     elif aria2_match:
-                        size = aria2_match.group(1)
+                        raw_size = aria2_match.group(1)
                         pct = float(aria2_match.group(2))
-                        speed = aria2_match.group(3) + "/s"
-                        eta = aria2_match.group(4)
+                        raw_speed = aria2_match.group(3) + "/s"
 
                     if pct is not None:
+                        total_bytes = parse_bytes(raw_size)
+                        speed_bytes = parse_bytes(raw_speed)
+                        downloaded_bytes = int(total_bytes * (pct / 100.0))
+
                         with active_lock:
+                            # Smoothing Speed (last 10 samples)
+                            history = active_tasks[task_id]["speed_history"]
+                            history.append(speed_bytes)
+                            if len(history) > 10:
+                                history.pop(0)
+                            
+                            avg_speed = sum(history) / len(history) if history else speed_bytes
+                            
+                            smoothed_eta = 0
+                            if avg_speed > 0:
+                                smoothed_eta = int((total_bytes - downloaded_bytes) / avg_speed)
+
+                            time_elapsed = int(time.time() - active_tasks[task_id].get("start_time", time.time()))
+
                             active_tasks[task_id].update({
                                 "percent": pct,
-                                "size": size,
-                                "speed": speed,
-                                "eta": eta,
+                                "total_bytes": total_bytes,
+                                "downloaded_bytes": downloaded_bytes,
+                                "speed_bytes": avg_speed,
+                                "eta_seconds": smoothed_eta,
+                                "time_elapsed": time_elapsed,
                                 "status": "downloading"
                             })
-                p2.wait()
-                if p2.returncode == 0:
+
+                process.wait()
+
+                if process.returncode == 0:
                     with active_lock:
                         active_tasks[task_id].update({
                             "percent": 100.0,
@@ -426,17 +445,75 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                         })
                         save_history(active_tasks[task_id])
                 else:
+                    # If command failed with impersonate, try plain without impersonate
+                    cmd_plain = [c for c in cmd if c not in ["--impersonate", "safari"]]
+                    p2 = subprocess.Popen(cmd_plain, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env, start_new_session=True)
                     with active_lock:
-                        active_tasks[task_id].update({
-                            "status": "failed",
-                            "error": "Download blocked by site policy (HTTP 403). The site requires session cookies. Export cookies.txt into the app directory to download."
-                        })
-        except Exception as e:
-            with active_lock:
-                active_tasks[task_id].update({
-                    "status": "failed",
-                    "error": str(e)
-                })
+                        process_store[task_id] = p2
+                    for line in p2.stdout:
+                        prog_match = progress_regex.search(line)
+                        aria2_match = aria2_regex.search(line)
+                        
+                        pct, raw_size, raw_speed, raw_eta = None, None, None, None
+    
+                        if prog_match:
+                            pct = float(prog_match.group(1))
+                            raw_size = prog_match.group(2)
+                            raw_speed = prog_match.group(3)
+                        elif aria2_match:
+                            raw_size = aria2_match.group(1)
+                            pct = float(aria2_match.group(2))
+                            raw_speed = aria2_match.group(3) + "/s"
+    
+                        if pct is not None:
+                            total_bytes = parse_bytes(raw_size)
+                            speed_bytes = parse_bytes(raw_speed)
+                            downloaded_bytes = int(total_bytes * (pct / 100.0))
+
+                            with active_lock:
+                                history = active_tasks[task_id]["speed_history"]
+                                history.append(speed_bytes)
+                                if len(history) > 10:
+                                    history.pop(0)
+                                
+                                avg_speed = sum(history) / len(history) if history else speed_bytes
+                                
+                                smoothed_eta = 0
+                                if avg_speed > 0:
+                                    smoothed_eta = int((total_bytes - downloaded_bytes) / avg_speed)
+
+                                time_elapsed = int(time.time() - active_tasks[task_id].get("start_time", time.time()))
+
+                                active_tasks[task_id].update({
+                                    "percent": pct,
+                                    "total_bytes": total_bytes,
+                                    "downloaded_bytes": downloaded_bytes,
+                                    "speed_bytes": avg_speed,
+                                    "eta_seconds": smoothed_eta,
+                                    "time_elapsed": time_elapsed,
+                                    "status": "downloading"
+                                })
+                    p2.wait()
+                    if p2.returncode == 0:
+                        with active_lock:
+                            active_tasks[task_id].update({
+                                "percent": 100.0,
+                                "status": "completed",
+                                "filepath": filepath or os.path.join(output_dir, f"{active_tasks[task_id]['title']}.mp4")
+                            })
+                            save_history(active_tasks[task_id])
+                    else:
+                        with active_lock:
+                            active_tasks[task_id].update({
+                                "status": "failed",
+                                "error": "Download blocked by site policy (HTTP 403). The site requires session cookies. Export cookies.txt into the app directory to download."
+                            })
+            except Exception as e:
+                with active_lock:
+                    active_tasks[task_id].update({
+                        "status": "failed",
+                        "error": str(e)
+                    })
 
     t = threading.Thread(target=run, daemon=True)
     t.start()
@@ -547,7 +624,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 active_tasks[task_id] = task_info
 
             is_playlist = data.get("is_playlist", False)
-            start_download_thread(task_id, url, format_id, is_audio, output_dir, is_playlist=is_playlist)
+            force_mp4 = data.get("force_mp4", False)
+            start_download_thread(task_id, url, format_id, is_audio, output_dir, is_playlist=is_playlist, force_mp4=force_mp4)
             self.send_json({"task_id": task_id, "status": "queued"})
             return
 
@@ -651,6 +729,19 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({"success": True})
             return
 
+        elif path == "/api/update-engine":
+            try:
+                # Runs yt-dlp -U
+                cmd = [YTDLP_BIN, "-U"]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                if res.returncode == 0:
+                    self.send_json({"success": True, "output": res.stdout})
+                else:
+                    self.send_json({"error": res.stderr or res.stdout}, 500)
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500)
+            return
+
         self.send_json({"error": "Not Found"}, 404)
 
     def send_json(self, obj, code=200):
@@ -663,8 +754,19 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 if __name__ == "__main__":
+    import webview
     os.chdir(str(PUBLIC_DIR))
-    print(f"OmniStream Server starting on http://localhost:{PORT}")
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), RequestHandler) as httpd:
-        httpd.serve_forever()
+    
+    def run_server():
+        print(f"OmniStream Server starting on http://localhost:{PORT}")
+        socketserver.TCPServer.allow_reuse_address = True
+        with socketserver.TCPServer(("", PORT), RequestHandler) as httpd:
+            httpd.serve_forever()
+
+    # Start HTTP server in background thread
+    t = threading.Thread(target=run_server, daemon=True)
+    t.start()
+    
+    # Start native webview window
+    webview.create_window("OmniStream", f"http://localhost:{PORT}", width=1000, height=800, background_color="#0d1117")
+    webview.start()

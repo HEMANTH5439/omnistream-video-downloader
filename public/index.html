@@ -34,6 +34,13 @@
             </div>
 
             <div class="header-actions">
+                <button id="versionBtn" class="btn btn-text btn-sm" style="margin-right: 0.5rem; opacity: 0.7; font-weight: 500;" title="View Changelog">
+                    v1.4.0
+                </button>
+                <button id="updateEngineBtn" class="btn btn-text btn-sm" style="margin-right: 0.5rem;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+                    Update Engine
+                </button>
                 <button id="openFolderBtn" class="btn btn-secondary btn-sm">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                     Open Folder
@@ -47,7 +54,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                 <span>Save Folder:</span>
             </div>
-            <input type="text" id="outputPathInput" value="/Users/chillsyeah/.gemini/antigravity/scratch/downloads" title="Destination folder path">
+            <input type="text" id="outputPathInput" placeholder="Select a save folder..." title="Destination folder path">
             <input type="file" id="folderPickerInput" webkitdirectory directory style="display:none;">
             <button id="browseFolderBtn" class="btn-xs btn-browse">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
@@ -76,18 +83,6 @@
                         <div class="spinner hidden" id="analyzeSpinner"></div>
                     </button>
                 </form>
-
-                <!-- Supported Platforms Badges -->
-                <div class="platform-tags">
-                    <span class="badge">YouTube Playlists</span>
-                    <span class="badge">YouTube HD</span>
-                    <span class="badge">TikTok</span>
-                    <span class="badge">Twitter / X</span>
-                    <span class="badge">Vimeo</span>
-                    <span class="badge">Twitch</span>
-                    <span class="badge">Reddit</span>
-                    <span class="badge">+ 1000 More</span>
-                </div>
             </section>
 
             <!-- Video / Playlist Analysis Result Card -->
@@ -109,13 +104,38 @@
 
                         <!-- Format Selector -->
                         <div class="format-selection-group">
-                            <label for="formatSelect">Select Download Resolution & Quality:</label>
+                            <div class="format-label-wrapper">
+                                <label for="formatSelect">Select Download Resolution & Quality:</label>
+                                <div class="info-tooltip-container">
+                                    <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                    <div class="tooltip-content">
+                                        <strong>MP4 (Recommended):</strong> Universal compatibility. Plays perfectly on Mac, iPhone, and Windows. Default choice.<br><br>
+                                        <strong>WEBM:</strong> High quality (4K/8K) at smaller file sizes, but may require VLC Player or Chrome to play natively on older Macs.<br><br>
+                                        <strong>Audio (MP3):</strong> Extracts only the sound.
+                                    </div>
+                                </div>
+                            </div>
                             <div class="select-wrapper">
                                 <select id="formatSelect">
                                     <!-- Populated via JS -->
                                 </select>
                                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                             </div>
+                        </div>
+
+                        <!-- Force MP4 Checkbox -->
+                        <div class="force-mp4-group">
+                            <label class="checkbox-label" title="(Note: Converting high-res videos may take extra time depending on your Mac's speed)">
+                                <input type="checkbox" id="forceMp4Checkbox">
+                                <span class="custom-checkbox"></span>
+                                Force convert to MP4 (Universal Compatibility)
+                            </label>
+                            
+                            <label class="checkbox-label" style="margin-left: 1rem;" title="Embeds English/Auto-generated subtitles into the video file">
+                                <input type="checkbox" id="embedSubsCheckbox">
+                                <span class="custom-checkbox"></span>
+                                Embed Subtitles (If available)
+                            </label>
                         </div>
 
                         <div class="action-buttons">
@@ -180,6 +200,74 @@
         <footer class="app-footer">
             <p>OmniStream &bull; Powered by yt-dlp & Python 3.12 &bull; Save Path Customizable</p>
         </footer>
+    </div>
+
+    <!-- Changelog Modal -->
+    <div id="changelogModal" class="modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--card-border); border-radius: var(--radius-lg); width: 90%; max-width: 650px; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+            <div class="modal-header" style="padding: 1.5rem 2rem; border-bottom: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 1.5rem; margin: 0; color: #fff;">OmniStream <span style="color: var(--accent-cyan); font-weight: 300;">Changelog</span></h2>
+                <button id="closeChangelogBtn" class="action-icon-btn" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 0.5rem; border-radius: 50%;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 2rem; max-height: 60vh; overflow-y: auto;">
+                
+                <div class="changelog-item" style="margin-bottom: 2rem;">
+                    <span class="version-tag" style="background: rgba(139, 92, 246, 0.2); color: #c4b5fd; padding: 0.3rem 0.8rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem;">v1.4.0 (Latest)</span>
+                    <ul class="changelog-list" style="margin-top: 1rem; color: var(--text-secondary); line-height: 1.6; padding-left: 1.5rem;">
+                        <li><strong>Unlimited Playlists:</strong> Removed backend caps to support extracting and downloading massive playlists (1000+ videos).</li>
+                        <li><strong>Universal Playlist Formats:</strong> Injected intelligent yt-dlp resolution fallbacks (1080p, 720p, 480p) into the playlist dropdown.</li>
+                        <li><strong>Lazy UI Loading:</strong> Playlist thumbnails now load lazily to prevent freezing when parsing huge channels.</li>
+                        <li><strong>Version Tracker:</strong> Added this subtle changelog modal to the top navigation bar.</li>
+                    </ul>
+                </div>
+                
+                <div class="changelog-item" style="margin-bottom: 2rem;">
+                    <span class="version-tag" style="background: rgba(255, 255, 255, 0.1); color: #fff; padding: 0.3rem 0.8rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem;">v1.3.0</span>
+                    <ul class="changelog-list" style="margin-top: 1rem; color: var(--text-secondary); line-height: 1.6; padding-left: 1.5rem;">
+                        <li><strong>Global Batch Tracker:</strong> Track playlist and multi-download progress seamlessly.</li>
+                        <li><strong>Advanced Dashboard:</strong> See exact MB downloaded, true speed, and time elapsed.</li>
+                        <li><strong>Smoothed ETA Engine:</strong> Intelligent sliding-window averager prevents wild ETA jumping.</li>
+                        <li><strong>True MKV Labels:</strong> Dropdown formats intelligently label merged videos as MKV.</li>
+                    </ul>
+                </div>
+                
+                <div class="changelog-item" style="margin-bottom: 2rem;">
+                    <span class="version-tag" style="background: rgba(255, 255, 255, 0.1); color: #fff; padding: 0.3rem 0.8rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem;">v1.2.1</span>
+                    <ul class="changelog-list" style="margin-top: 1rem; color: var(--text-secondary); line-height: 1.6; padding-left: 1.5rem;">
+                        <li><strong>Native Application:</strong> Upgraded from a browser tab to a fully standalone, native macOS window powered by <code>pywebview</code>.</li>
+                    </ul>
+                </div>
+                
+                <div class="changelog-item" style="margin-bottom: 2rem;">
+                    <span class="version-tag" style="background: rgba(255, 255, 255, 0.1); color: #fff; padding: 0.3rem 0.8rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem;">v1.2.0 (Pro Upgrade)</span>
+                    <ul class="changelog-list" style="margin-top: 1rem; color: var(--text-secondary); line-height: 1.6; padding-left: 1.5rem;">
+                        <li><strong>Smart Audio:</strong> MP3 downloads natively embed YouTube thumbnails as Album Art with ID3 tags.</li>
+                        <li><strong>Embedded Subtitles:</strong> Automatically bake English and auto-generated subtitles into video containers.</li>
+                        <li><strong>Queue Engine:</strong> Protects Mac performance by limiting concurrent downloads to 3 active streams.</li>
+                        <li><strong>Auto Updater:</strong> One-click "Update Engine" button fetches the latest <code>yt-dlp</code> binary to bypass bot protections.</li>
+                    </ul>
+                </div>
+                
+                <div class="changelog-item" style="margin-bottom: 2rem;">
+                    <span class="version-tag" style="background: rgba(255, 255, 255, 0.1); color: #fff; padding: 0.3rem 0.8rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem;">v1.1.0</span>
+                    <ul class="changelog-list" style="margin-top: 1rem; color: var(--text-secondary); line-height: 1.6; padding-left: 1.5rem;">
+                        <li>Major UI overhaul featuring Glassmorphism, slick animations, and custom scrollbars.</li>
+                        <li>Dynamic format dropdown for selecting specific video resolutions and audio extracts.</li>
+                        <li>"Save Folder" memory saves the destination path across sessions.</li>
+                    </ul>
+                </div>
+                
+                <div class="changelog-item">
+                    <span class="version-tag" style="background: rgba(255, 255, 255, 0.1); color: #fff; padding: 0.3rem 0.8rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem;">v1.0.0</span>
+                    <ul class="changelog-list" style="margin-top: 1rem; color: var(--text-secondary); line-height: 1.6; padding-left: 1.5rem;">
+                        <li>Initial Release: Built core downloading logic powered by yt-dlp.</li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
     </div>
 
     <!-- Notification Toast -->

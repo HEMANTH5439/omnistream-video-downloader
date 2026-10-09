@@ -13,3 +13,12 @@ bin/
 *.part
 *.part.aria2
 *.tar.xz
+build/
+dist/
+pdf_env/
+response.json
+tasks.json
+test_merge.mp4
+*.spec
+instructions.html
+instructions.pdf

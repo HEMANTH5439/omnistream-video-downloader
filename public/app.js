@@ -10,7 +10,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const outputPathInput = document.getElementById('outputPathInput');
     const resetPathBtn = document.getElementById('resetPathBtn');
     const browseFolderBtn = document.getElementById('browseFolderBtn');
-    const DEFAULT_PATH = "/Users/chillsyeah/.gemini/antigravity/scratch/downloads";
+
+    // Load saved path from localStorage on startup
+    const savedPath = localStorage.getItem('saveFolderPath');
+    if (savedPath) {
+        outputPathInput.value = savedPath;
+    }
+
+    // Save manually typed paths
+    outputPathInput.addEventListener('change', () => {
+        localStorage.setItem('saveFolderPath', outputPathInput.value.trim());
+    });
 
     const folderPickerInput = document.getElementById('folderPickerInput');
 
@@ -22,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (data.folder_path) {
                 outputPathInput.value = data.folder_path;
+                localStorage.setItem('saveFolderPath', data.folder_path);
                 showToast(`Selected save folder: ${data.folder_path}`);
                 return;
             }
@@ -42,8 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (folderName) {
                 const currentPath = outputPathInput.value.trim();
                 const basePath = currentPath.substring(0, currentPath.lastIndexOf('/'));
-                const newPath = basePath ? `${basePath}/${folderName}` : `/Users/chillsyeah/Downloads/${folderName}`;
+                const newPath = basePath ? `${basePath}/${folderName}` : `/Users/Shared/${folderName}`;
                 outputPathInput.value = newPath;
+                localStorage.setItem('saveFolderPath', newPath);
                 showToast(`Selected folder: ${newPath}`);
             }
         }
@@ -80,8 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Reset path button
     resetPathBtn.addEventListener('click', () => {
-        outputPathInput.value = DEFAULT_PATH;
-        showToast("Reset to default downloads folder");
+        outputPathInput.value = "";
+        localStorage.removeItem('saveFolderPath');
+        showToast("Save folder cleared");
     });
 
     // Toast helper
@@ -108,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Open Downloads Folder
     openFolderBtn.addEventListener('click', async () => {
-        const customPath = outputPathInput.value.trim() || DEFAULT_PATH;
+        const customPath = outputPathInput.value.trim();
         try {
             await fetch('/api/open-folder', {
                 method: 'POST',
@@ -131,6 +144,30 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast("Failed to clear history");
         }
     });
+
+    const updateEngineBtn = document.getElementById('updateEngineBtn');
+    if (updateEngineBtn) {
+        updateEngineBtn.addEventListener('click', async () => {
+            const icon = updateEngineBtn.querySelector('svg');
+            icon.classList.add('spin-slow');
+            updateEngineBtn.disabled = true;
+            showToast("Updating engine in background...", 5000);
+            try {
+                const res = await fetch('/api/update-engine', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("Engine successfully updated to latest version!", 5000);
+                } else {
+                    showToast(`Update failed: ${data.error}`, 5000);
+                }
+            } catch (err) {
+                showToast("Update request failed.");
+            } finally {
+                icon.classList.remove('spin-slow');
+                updateEngineBtn.disabled = false;
+            }
+        });
+    }
 
     // Analyze URL Form Submit
     analyzeForm.addEventListener('submit', async (e) => {
@@ -213,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     card.className = 'playlist-item-card';
                     card.innerHTML = `
                         <input type="checkbox" class="playlist-checkbox" data-url="${escapeHtml(item.url)}" data-title="${escapeHtml(item.title)}" data-thumb="${escapeHtml(item.thumbnail || '')}" checked style="accent-color: #8b5cf6; width: 16px; height: 16px; cursor: pointer;">
-                        <img src="${item.thumbnail || 'https://via.placeholder.com/50x35'}" alt="thumb">
+                        <img loading="lazy" src="${item.thumbnail || 'https://via.placeholder.com/50x35'}" alt="thumb">
                         <div class="playlist-item-info">
                             <span class="playlist-item-title">${idx + 1}. ${escapeHtml(item.title)}</span>
                             <span class="playlist-item-duration">${item.duration || ''}</span>
@@ -301,11 +338,19 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadNowBtn.addEventListener('click', async () => {
         if (!currentVideoData) return;
 
+        const customOutputDir = outputPathInput.value.trim();
+        if (!customOutputDir) {
+            showToast("⚠️ Please select a Save Folder first!");
+            outputPathInput.focus();
+            outputPathInput.style.borderColor = '#ef4444';
+            setTimeout(() => outputPathInput.style.borderColor = '', 2000);
+            return;
+        }
+
         const selectedOpt = formatSelect.options[formatSelect.selectedIndex];
         const formatId = selectedOpt ? selectedOpt.value : null;
         const formatLabel = selectedOpt ? selectedOpt.dataset.label : 'Standard';
         const isAudio = selectedOpt ? selectedOpt.dataset.isAudio === 'true' : false;
-        const customOutputDir = outputPathInput.value.trim() || DEFAULT_PATH;
 
         if (currentVideoData.is_playlist) {
             const checkedBoxes = Array.from(document.querySelectorAll('.playlist-checkbox:checked'));
@@ -329,6 +374,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     format_label: formatLabel,
                     is_audio: isAudio,
                     is_playlist: false,
+                    force_mp4: document.getElementById('forceMp4Checkbox').checked,
+                    embed_subs: document.getElementById('embedSubsCheckbox').checked,
                     output_dir: customOutputDir
                 };
 
@@ -356,6 +403,8 @@ document.addEventListener('DOMContentLoaded', () => {
             format_label: formatLabel,
             is_audio: isAudio,
             is_playlist: false,
+            force_mp4: document.getElementById('forceMp4Checkbox').checked,
+            embed_subs: document.getElementById('embedSubsCheckbox').checked,
             output_dir: customOutputDir
         };
 
@@ -396,6 +445,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function formatBytes(bytes) {
+        if (!bytes || isNaN(bytes)) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatTime(seconds) {
+        if (!seconds || isNaN(seconds)) return '--:--';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        if (h > 0) return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
     // Render Active Tasks
     function renderActiveTasks(tasks) {
         const activeTasks = tasks.filter(t => t.status === 'downloading' || t.status === 'queued' || t.status === 'paused');
@@ -409,6 +475,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
         emptyDownloads.classList.add('hidden');
 
+        // Global Batch Tracker Logic
+        let existingGlobalCard = document.getElementById('global-batch-card');
+        if (activeTasks.length > 1) {
+            let totalBytes = 0;
+            let downloadedBytes = 0;
+            let globalSpeed = 0;
+            let downloadingCount = 0;
+            
+            activeTasks.forEach(t => {
+                if (t.total_bytes) totalBytes += t.total_bytes;
+                if (t.downloaded_bytes) downloadedBytes += t.downloaded_bytes;
+                if (t.status === 'downloading') {
+                    if (t.speed_bytes) globalSpeed += t.speed_bytes;
+                    downloadingCount++;
+                }
+            });
+            
+            const globalPercent = totalBytes > 0 ? (downloadedBytes / totalBytes) * 100 : 0;
+            const globalEta = globalSpeed > 0 ? (totalBytes - downloadedBytes) / globalSpeed : 0;
+            
+            if (!existingGlobalCard) {
+                existingGlobalCard = document.createElement('div');
+                existingGlobalCard.id = 'global-batch-card';
+                existingGlobalCard.className = 'download-item global-progress-card';
+                downloadsList.insertBefore(existingGlobalCard, downloadsList.firstChild);
+            }
+            
+            existingGlobalCard.innerHTML = `
+                <div class="item-top">
+                    <div class="item-info">
+                        <span class="item-title" style="font-weight: 700; color: #8b5cf6;">📦 Global Batch Progress (${activeTasks.length} videos)</span>
+                        <span class="item-sub">${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)} total</span>
+                    </div>
+                    <div class="item-actions-right">
+                        <span class="status-pill downloading">Downloading ${downloadingCount}</span>
+                    </div>
+                </div>
+                <div class="progress-bar-container" style="height: 10px; background: rgba(139, 92, 246, 0.2);">
+                    <div class="progress-fill" style="width: ${globalPercent}%; background: linear-gradient(90deg, #8b5cf6, #3b82f6);"></div>
+                </div>
+                <div class="progress-stats">
+                    <span>${globalPercent.toFixed(1)}% completed</span>
+                    <span>${formatBytes(globalSpeed)}/s &bull; ETA: ${formatTime(globalEta)}</span>
+                </div>
+            `;
+        } else if (existingGlobalCard) {
+            existingGlobalCard.remove();
+        }
+
+        // Determine which task IDs should exist in the DOM
+        const renderedTaskIds = new Set(activeTasks.map(t => 'task-' + t.id));
+        if (activeTasks.length > 1) renderedTaskIds.add('global-batch-card');
+
+        // Remove old tasks not in the current list
+        Array.from(downloadsList.children).forEach(child => {
+            if (!renderedTaskIds.has(child.id)) {
+                child.remove();
+            }
+        });
+
         activeTasks.forEach(task => {
             let item = document.getElementById(`task-${task.id}`);
             if (!item) {
@@ -418,11 +544,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 downloadsList.appendChild(item);
             }
 
+            const isFallback = !task.total_bytes && task.size;
+            const sizeStr = task.total_bytes ? `${formatBytes(task.downloaded_bytes)} / ${formatBytes(task.total_bytes)}` : (task.size || '');
+            const speedStr = task.speed_bytes ? `${formatBytes(task.speed_bytes)}/s` : (task.speed || '0 KB/s');
+            const etaStr = task.eta_seconds !== undefined ? formatTime(task.eta_seconds) : (task.eta || '--:--');
+            const timeElapsedStr = task.time_elapsed !== undefined ? ` &bull; Time: ${formatTime(task.time_elapsed)}` : '';
+
             item.innerHTML = `
                 <div class="item-top">
                     <div class="item-info">
                         <span class="item-title">${escapeHtml(task.title)}</span>
-                        <span class="item-sub">${escapeHtml(task.format)} &bull; ${task.size || ''}</span>
+                        <span class="item-sub">${escapeHtml(task.format)} &bull; ${sizeStr}</span>
                     </div>
                     <div class="item-actions-right" style="display:flex; align-items:center; gap:0.5rem;">
                         <span class="status-pill ${task.status}">${task.status}</span>
@@ -446,8 +578,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="progress-fill" style="width: ${task.percent || 0}%"></div>
                 </div>
                 <div class="progress-stats">
-                    <span>${(task.percent || 0).toFixed(1)}% downloaded</span>
-                    <span>${task.speed || '0 KB/s'} &bull; ETA: ${task.eta || '--:--'}</span>
+                    <span>${(task.percent || 0).toFixed(1)}% downloaded${timeElapsedStr}</span>
+                    <span>${speedStr} &bull; ETA: ${etaStr}</span>
                 </div>
             `;
         });
@@ -579,4 +711,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial history fetch
     fetchHistory();
     startPollingTasks();
+
+    // Changelog Modal
+    const versionBtn = document.getElementById('versionBtn');
+    const changelogModal = document.getElementById('changelogModal');
+    const closeChangelogBtn = document.getElementById('closeChangelogBtn');
+
+    if (versionBtn && changelogModal && closeChangelogBtn) {
+        versionBtn.addEventListener('click', () => {
+            changelogModal.classList.remove('hidden');
+        });
+
+        closeChangelogBtn.addEventListener('click', () => {
+            changelogModal.classList.add('hidden');
+        });
+
+        changelogModal.addEventListener('click', (e) => {
+            if (e.target === changelogModal) {
+                changelogModal.classList.add('hidden');
+            }
+        });
+    }
 });

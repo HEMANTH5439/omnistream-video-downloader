@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1320 >>
+stream
+BT /F1 10 Tf 50 750 Td (OmniStream - Receiver Instructions) Tj ET
+BT /F1 10 Tf 50 724 Td (1. Sharing the Application) Tj ET
+BT /F1 10 Tf 50 708 Td (- Do NOT send OmniStream.app uncompressed via messaging or email.) Tj ET
+BT /F1 10 Tf 50 692 Td (- Always send OmniStream.zip \(the compressed file\).) Tj ET
+BT /F1 10 Tf 50 666 Td (2. Instructions for the Recipient \(First Time Setup\)) Tj ET
+BT /F1 10 Tf 50 650 Td (Step 1: Unzip OmniStream.zip by double-clicking it.) Tj ET
+BT /F1 10 Tf 50 634 Td (Step 2: Bypass macOS Gatekeeper \(Important!\)) Tj ET
+BT /F1 10 Tf 50 618 Td (- Right-click \(or Control + Click\) on the OmniStream app icon.) Tj ET
+BT /F1 10 Tf 50 602 Td (- Click Open from the menu.) Tj ET
+BT /F1 10 Tf 50 586 Td (- A security prompt will appear asking to confirm. Click Open.) Tj ET
+BT /F1 10 Tf 50 570 Td (- Note: You only need to right-click open once! Afterwards double-click normally.) Tj ET
+BT /F1 10 Tf 50 544 Td (3. How to Use) Tj ET
+BT /F1 10 Tf 50 528 Td (- Double-click OmniStream to start.) Tj ET
+BT /F1 10 Tf 50 512 Td (- Your web browser will open automatically at http://localhost:8888) Tj ET
+BT /F1 10 Tf 50 496 Td (- Paste any video link \(YouTube, Vimeo, Twitter, etc.\) and click Download.) Tj ET
+BT /F1 10 Tf 50 480 Td (- Videos are saved to Downloads/OmniStream on your Mac.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000257 00000 n 
+0000000310 + 1320 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+400
+%%EOF
