@@ -705,6 +705,11 @@ body {
     color: var(--success);
 }
 
+.status-pill.converting {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
 .status-pill.failed {
     background: rgba(239, 68, 68, 0.2);
     color: var(--danger);

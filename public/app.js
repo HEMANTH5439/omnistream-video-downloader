@@ -415,11 +415,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
+            
+            if (data.warning === "file_exists") {
+                const dupModal = document.getElementById('duplicateModal');
+                document.getElementById('dupFileName').textContent = data.title;
+                dupModal.style.display = 'flex';
+                
+                const handleChoice = async (action) => {
+                    dupModal.style.display = 'none';
+                    cleanup();
+                    if (action === 'cancel') return;
+                    
+                    if (action === 'replace') payload.force_replace = true;
+                    if (action === 'keep_both') payload.keep_both = true;
+                    
+                    try {
+                        const res2 = await fetch('/api/download', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const data2 = await res2.json();
+                        if (data2.task_id) {
+                            showToast("Download started!");
+                            startPollingTasks();
+                        }
+                    } catch (e) { showToast("Failed to initiate download."); }
+                };
+                
+                const cancelBtn = document.getElementById('dupCancelBtn');
+                const keepBtn = document.getElementById('dupKeepBothBtn');
+                const replaceBtn = document.getElementById('dupReplaceBtn');
+                
+                const onCancel = () => handleChoice('cancel');
+                const onKeep = () => handleChoice('keep_both');
+                const onReplace = () => handleChoice('replace');
+                
+                cancelBtn.addEventListener('click', onCancel);
+                keepBtn.addEventListener('click', onKeep);
+                replaceBtn.addEventListener('click', onReplace);
+                
+                const cleanup = () => {
+                    cancelBtn.removeEventListener('click', onCancel);
+                    keepBtn.removeEventListener('click', onKeep);
+                    replaceBtn.removeEventListener('click', onReplace);
+                };
+                return;
+            }
+
             if (data.task_id) {
                 showToast("Download started!");
                 startPollingTasks();
             } else {
-                showToast("Error starting download.");
+                showToast(data.error || "Error starting download.");
             }
         } catch (err) {
             showToast("Failed to initiate download.");
@@ -557,7 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="item-sub">${escapeHtml(task.format)} &bull; ${sizeStr}</span>
                     </div>
                     <div class="item-actions-right" style="display:flex; align-items:center; gap:0.5rem;">
-                        <span class="status-pill ${task.status}">${task.status}</span>
+                        <span class="status-pill ${task.status}">${task.status === 'converting' ? 'Converting to MP4...' : task.status}</span>
                         ${task.status === 'paused' ? 
                             `<button class="action-icon-btn btn-resume-task" data-id="${task.id}" title="Resume download">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>

@@ -35,7 +35,7 @@
 
             <div class="header-actions">
                 <button id="versionBtn" class="btn btn-text btn-sm" style="margin-right: 0.5rem; opacity: 0.7; font-weight: 500;" title="View Changelog">
-                    v1.4.1
+                    v1.4.2
                 </button>
                 <button id="updateEngineBtn" class="btn btn-text btn-sm" style="margin-right: 0.5rem;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
@@ -214,7 +214,15 @@
             <div class="modal-body" style="padding: 2rem; max-height: 60vh; overflow-y: auto;">
                 
                 <div class="changelog-item" style="margin-bottom: 2rem;">
-                    <span class="version-tag" style="background: rgba(139, 92, 246, 0.2); color: #c4b5fd; padding: 0.3rem 0.8rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem;">v1.4.1 (Latest)</span>
+                    <span class="version-tag" style="background: rgba(139, 92, 246, 0.2); color: #c4b5fd; padding: 0.3rem 0.8rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem;">v1.4.2 (Latest)</span>
+                    <ul class="changelog-list" style="margin-top: 1rem; color: var(--text-secondary); line-height: 1.6; padding-left: 1.5rem;">
+                        <li><strong>Duplicate File Warning:</strong> Added an intelligent prompt when trying to download a file with an existing title, giving you the option to Replace, Keep Both, or Cancel.</li>
+                        <li><strong>Live Converter Status:</strong> The status UI now properly reports 'Converting to MP4...' instead of appearing frozen when running ffmpeg recodes.</li>
+                    </ul>
+                </div>
+
+                <div class="changelog-item" style="margin-bottom: 2rem;">
+                    <span class="version-tag" style="background: rgba(255, 255, 255, 0.1); color: #fff; padding: 0.3rem 0.8rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem;">v1.4.1</span>
                     <ul class="changelog-list" style="margin-top: 1rem; color: var(--text-secondary); line-height: 1.6; padding-left: 1.5rem;">
                         <li><strong>Playlist Format Hotfix:</strong> Relaxed strict extraction rules so downloads don't fail when certain videos lack M4A audio streams.</li>
                     </ul>
@@ -273,6 +281,26 @@
                     </ul>
                 </div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate File Modal -->
+    <div id="duplicateModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+        <div class="modal-content" style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+            <div class="modal-header" style="padding: 1.5rem 2rem; border-bottom: 1px solid var(--card-border);">
+                <h3 style="margin: 0; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    File Already Exists
+                </h3>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem 2rem; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+                A file named <strong id="dupFileName" style="color: #fff;"></strong> already exists in this folder. What would you like to do?
+            </div>
+            <div class="modal-footer" style="padding: 1.5rem 2rem; border-top: 1px solid var(--card-border); display: flex; justify-content: flex-end; gap: 1rem;">
+                <button id="dupCancelBtn" class="btn btn-secondary btn-sm" style="flex: 1;">Cancel</button>
+                <button id="dupKeepBothBtn" class="btn btn-primary btn-sm" style="flex: 1; background: var(--accent-cyan); color: #000;">Keep Both</button>
+                <button id="dupReplaceBtn" class="btn btn-primary btn-sm" style="flex: 1; background: var(--accent-orange); color: #000; border: none;">Replace</button>
             </div>
         </div>
     </div>

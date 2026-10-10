@@ -296,7 +296,7 @@ def get_video_info(url):
     except Exception as e:
         return { "error": str(e) }
 
-def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_playlist=False, force_mp4=False, embed_subs=False):
+def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_playlist=False, force_mp4=False, embed_subs=False, custom_filename=None, force_replace=False):
     def run():
         with active_lock:
             active_tasks[task_id]["status"] = "downloading"
@@ -311,7 +311,10 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
         if is_playlist:
             out_template = os.path.join(output_dir, "%(playlist_title,playlist)s", "%(playlist_index,item_number)s - %(title)s.%(ext)s")
         else:
-            out_template = os.path.join(output_dir, "%(title)s.%(ext)s")
+            if custom_filename:
+                out_template = os.path.join(output_dir, f"{custom_filename}.%(ext)s")
+            else:
+                out_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 
         # Convert segment .ts URL to master playlist URL if user pasted segment URL
         target_url = url
@@ -352,6 +355,9 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                     "--downloader-args", "aria2c:-x 16 -s 16 -k 1M"
                 ])
 
+        if force_replace:
+            cmd.append("--force-overwrites")
+
         cmd.append(target_url)
 
         env = os.environ.copy()
@@ -377,6 +383,7 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                 aria2_regex = re.compile(r'\[#.*? \S+/([~\d\.\w]+)\((\d+)%\).*?DL:([~\d\.\w]+).*?ETA:([^\]]+)\]')
                 dest_regex = re.compile(r'\[download\] Destination:\s+(.+)')
                 merge_regex = re.compile(r'\[Merger\] Merging formats into "(.+)"')
+                recode_regex = re.compile(r'\[VideoConvertor\] Converting video from .* to .*; Destination: (.+)')
 
                 filepath = None
 
@@ -389,6 +396,12 @@ def start_download_thread(task_id, url, format_id, is_audio, output_dir, is_play
                     merge_match = merge_regex.search(line)
                     if merge_match:
                         filepath = merge_match.group(1).strip().replace('"', '')
+
+                    recode_match = recode_regex.search(line)
+                    if recode_match:
+                        filepath = recode_match.group(1).strip()
+                        with active_lock:
+                            active_tasks[task_id]["status"] = "converting"
 
                     prog_match = progress_regex.search(line)
                     aria2_match = aria2_regex.search(line)
@@ -599,10 +612,32 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             format_id = data.get("format_id")
             is_audio = data.get("is_audio", False)
             output_dir = data.get("output_dir", str(DOWNLOADS_DIR))
+            force_replace = data.get("force_replace", False)
+            keep_both = data.get("keep_both", False)
+            is_playlist = data.get("is_playlist", False)
 
             if not url:
                 self.send_json({"error": "URL is required"}, 400)
                 return
+
+            if not is_playlist and not force_replace and not keep_both:
+                import glob
+                safe_title = title.replace('/', '_')
+                existing_files = glob.glob(os.path.join(output_dir, f"{safe_title}.*"))
+                existing_files = [f for f in existing_files if not f.endswith('.part') and not f.endswith('.aria2')]
+                if existing_files:
+                    self.send_json({"warning": "file_exists", "title": title})
+                    return
+
+            custom_filename = None
+            if keep_both:
+                import glob
+                safe_title = title.replace('/', '_')
+                counter = 1
+                while glob.glob(os.path.join(output_dir, f"{safe_title} ({counter}).*")):
+                    counter += 1
+                custom_filename = f"{title} ({counter})"
+                title = custom_filename
 
             task_id = str(uuid.uuid4())[:8]
             task_info = {
@@ -623,9 +658,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             with active_lock:
                 active_tasks[task_id] = task_info
 
-            is_playlist = data.get("is_playlist", False)
             force_mp4 = data.get("force_mp4", False)
-            start_download_thread(task_id, url, format_id, is_audio, output_dir, is_playlist=is_playlist, force_mp4=force_mp4)
+            start_download_thread(task_id, url, format_id, is_audio, output_dir, is_playlist=is_playlist, force_mp4=force_mp4, custom_filename=custom_filename, force_replace=force_replace)
             self.send_json({"task_id": task_id, "status": "queued"})
             return
 
