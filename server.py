@@ -209,10 +209,10 @@ def get_video_info(url):
                 "entries": parsed_entries,
                 "extractor": data.get("extractor_key", "Playlist"),
                 "presets": [
-                    { "format_id": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best", "resolution": "Best Quality", "label": "Best Available Quality for All Videos (Auto MP4)", "ext": "mp4" },
-                    { "format_id": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best", "resolution": "1080p (Full HD)", "label": "1080p (Full HD) - If available", "ext": "mp4" },
-                    { "format_id": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best", "resolution": "720p (HD)", "label": "720p (HD) - If available", "ext": "mp4" },
-                    { "format_id": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best", "resolution": "480p (SD)", "label": "480p (SD) - If available", "ext": "mp4" },
+                    { "format_id": "bestvideo+bestaudio/best", "resolution": "Best Quality", "label": "Best Available Quality for All Videos", "ext": "mkv" },
+                    { "format_id": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best", "resolution": "1080p (Full HD)", "label": "1080p (Full HD) - If available", "ext": "mkv" },
+                    { "format_id": "bestvideo[height<=720]+bestaudio/best[height<=720]/best", "resolution": "720p (HD)", "label": "720p (HD) - If available", "ext": "mkv" },
+                    { "format_id": "bestvideo[height<=480]+bestaudio/best[height<=480]/best", "resolution": "480p (SD)", "label": "480p (SD) - If available", "ext": "mkv" },
                     { "format_id": "bestaudio/best", "resolution": "Audio MP3", "label": "Extract Audio MP3 for All Videos", "ext": "mp3", "is_audio": True }
                 ]
             }
